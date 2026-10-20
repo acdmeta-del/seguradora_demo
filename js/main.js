@@ -239,7 +239,8 @@
   /* ---------- Entrada do carro no banner (ao carregar a página) ----------
    * O carro começa fora do banner, à direita, e anda até a posição final
    * definida no CSS (.hero__car), desacelerando ao estacionar. Não depende da rolagem.
-   * Com prefers-reduced-motion ou sem GSAP: o carro já aparece estacionado.
+   * Roda sempre, mesmo com animações desligadas no sistema (decisão do projeto).
+   * Sem GSAP: o carro já aparece estacionado.
    */
   const CAR_INTRO = {
     duration: 1.8,      // PERSONALIZAR: duração da entrada, em segundos
@@ -251,10 +252,9 @@
     const root = document.documentElement;
     const banner = $(".hero__banner");
     const car = $(".hero__car");
-    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const show = () => root.classList.remove("car-intro");
 
-    if (!banner || !car || !window.gsap || reduce) { show(); return; }
+    if (!banner || !car || !window.gsap) { show(); return; }
 
     const img = $("img", car);
     const run = () => {

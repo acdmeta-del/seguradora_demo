@@ -16,12 +16,10 @@
 
   <link rel="stylesheet" href="css/styles.css">
   <!-- Esconde o carro até a animação de entrada começar (evita aparecer parado e "pular").
-       Se algo falhar, ele reaparece sozinho em 2,5 s. Movimento reduzido: carro já parado. -->
+       Se algo falhar, ele reaparece sozinho em 2,5 s. -->
   <script>
-    if (!window.matchMedia || !matchMedia("(prefers-reduced-motion: reduce)").matches) {
-      document.documentElement.classList.add("car-intro");
-      setTimeout(function () { document.documentElement.classList.remove("car-intro"); }, 2500);
-    }
+    document.documentElement.classList.add("car-intro");
+    setTimeout(function () { document.documentElement.classList.remove("car-intro"); }, 2500);
   </script>
 </head>
 <body>

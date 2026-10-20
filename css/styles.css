@@ -374,6 +374,10 @@ main:focus { outline: none; }
   .hero__panel { padding: var(--space-5) var(--space-5) var(--space-6); }
   .hero__cta { padding: var(--space-6) var(--space-5); }
 }
+/* Desktop com altura suficiente: o texto acompanha a rolagem até o fim do formulário ao lado */
+@media (min-width: 1024px) and (min-height: 700px) {
+  .hero__col--main { position: sticky; top: calc(var(--header-h) + var(--space-4)); }
+}
 
 /* ==========================================================================
    SEÇÕES (genérico)

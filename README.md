@@ -28,4 +28,6 @@ Placeholders aparecem entre `[colchetes]` ou com `0000`.
 - GSAP 3.12.5 (cdnjs, versão fixa), com cópia local em `js/vendor/` caso o CDN não carregue
 - Google Fonts (Nunito)
 
-O carro entra pela direita assim que a página carrega. Sem JavaScript ou com movimento reduzido no sistema (Windows 10: Configurações > Facilidade de Acesso > Tela > "Mostrar animações no Windows" desligado), ele já aparece estacionado.
+O carro entra pela direita assim que a página carrega, sempre, mesmo com as animações do sistema desligadas (decisão do projeto). Sem JavaScript, ele já aparece estacionado.
+
+No desktop, o texto do topo acompanha a rolagem (sticky) até o fim do formulário ao lado; em telas com menos de 700 px de altura ele rola normalmente.
