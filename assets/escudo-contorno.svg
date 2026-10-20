@@ -1,5 +1,0 @@
-<!-- ESCUDO CONTORNO: estado inicial do escudo no scrollytelling. -->
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 240" width="200" height="240" aria-hidden="true">
-  <path d="M100 6 L188 38 V112 C188 172 150 212 100 234 C50 212 12 172 12 112 V38 Z" fill="#FFFFFF" stroke="#E8E8E8" stroke-width="8"/>
-  <path d="M64 120 L90 146 L140 92" fill="none" stroke="#E8E8E8" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
-</svg>

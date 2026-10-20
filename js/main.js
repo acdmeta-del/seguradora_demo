@@ -31,16 +31,48 @@
   const waLink = (msg) =>
     `https://wa.me/${digits(C.contatos.ddi)}${digits(C.contatos.whatsapp)}?text=${encodeURIComponent(msg || C.contatos.mensagemPadrao)}`;
   const telLink = (n) => `tel:+${digits(C.contatos.ddi)}${digits(n)}`;
+  // "#ancora" | "tel:<chave em contatos>" | "wa:<mensagem>"
+  const actionHref = (acao) => {
+    if (acao.startsWith("tel:")) return telLink(C.contatos[acao.slice(4)] || "");
+    if (acao.startsWith("wa:")) return waLink(acao.slice(3));
+    return acao;
+  };
+  // Pontuação final do título em verde-limão (assinatura visual), ou um ponto se não houver
+  const accentize = (el) => {
+    const t = el.textContent.trim();
+    const m = t.match(/^(.*?)([.!?])$/s);
+    el.innerHTML = m
+      ? `${esc(m[1])}<span class="accent">${m[2]}</span>`
+      : `${esc(t)}<span class="accent" aria-hidden="true">.</span>`;
+  };
 
   /* ---------- Renderização ---------- */
   const renderers = {
     nav: () => C.nav.map((i) => `<li><a href="${esc(i.ancora)}">${esc(i.rotulo)}</a></li>`).join(""),
 
-    jornada: () => C.jornada.beneficios.map((b) => `
-      <li class="journey__item">
-        ${iconImg(b.icone, 36)}
-        <span><strong>${esc(b.titulo)}</strong><small>${esc(b.texto)}</small></span>
+    // Linhas de planos no cartão do topo (ícone, nome, descrição, "Saiba mais")
+    linhas: () => C.planos.itens.map((p) => `
+      <li>
+        <a class="hero__row" href="#planos">
+          ${iconImg("carro-linha", 48)}
+          <span class="hero__row-text">
+            <strong class="hero__row-title">${esc(C.hero.linhaPrefixo)} ${esc(p.nome)}<span class="accent" aria-hidden="true">.</span></strong>
+            <span>${esc(p.descricao)} <span class="hero__row-link">${esc(C.hero.linhaLink)} ›</span></span>
+          </span>
+          <svg class="hero__row-chevron" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M9 5l7 7-7 7" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </a>
       </li>`).join(""),
+
+    // Atalhos do painel verde
+    atalhos: () => C.hero.atalhos.map((a) => {
+      const ext = a.acao.startsWith("wa:");
+      return `
+      <li>
+        <a class="hero__tile" href="${esc(actionHref(a.acao))}"${ext ? ' target="_blank" rel="noopener"' : ""}>
+          ${iconImg(a.icone, 32)}<span>${esc(a.rotulo)}</span>
+        </a>
+      </li>`;
+    }).join(""),
 
     servicos: () => C.servicos.itens.map((s) => `
       <li class="service">
@@ -112,6 +144,7 @@
       const fn = renderers[el.dataset.render];
       if (fn) el.innerHTML = fn();
     });
+    $$("[data-accent]").forEach(accentize);
     $$("[data-icon]").forEach((el) => { el.outerHTML = ICONS[el.dataset.icon] || ""; });
     $$("[data-wa]").forEach((a) => {
       a.href = waLink();
@@ -203,76 +236,37 @@
     });
   }
 
-  /* ---------- Scrollytelling do carro (docs/referencias.md, seção 4) ----------
-   * Rolar para baixo: carro entra pela direita e anda para a esquerda.
-   * Rolar para cima: caminho inverso. Parou de rolar, o carro para (scrub).
-   * Sem GSAP ou com prefers-reduced-motion: a seção fica estática.
+  /* ---------- Entrada do carro no banner (scroll-linked) ----------
+   * Rolar para baixo: o carro entra pela direita e desacelera até estacionar
+   * um pouco à direita do banner (posição definida no CSS em .hero__car).
+   * Rolar para cima: ele volta pelo mesmo caminho. Parou de rolar, o carro para (scrub).
+   * Sem GSAP ou com prefers-reduced-motion: o carro já aparece estacionado.
    */
-  function initJourney() {
-    const section = $(".journey");
-    if (!section || !window.gsap || !window.ScrollTrigger) return;
+  function initHeroCar() {
+    const banner = $(".hero__banner");
+    const car = $(".hero__car");
+    if (!banner || !car || !window.gsap || !window.ScrollTrigger) return;
 
     gsap.registerPlugin(ScrollTrigger);
     ScrollTrigger.config({ ignoreMobileResize: true });
 
-    const stage = $(".journey__stage", section);
-    const car = $(".car--journey", section);
-    const wheels = $$(".car__wheel", car);
-    const items = $$(".journey__item", section);
-    const shieldOn = $(".journey__shield-on", section);
-    const closing = $(".journey__closing", section);
+    gsap.matchMedia().add("(prefers-reduced-motion: no-preference)", () => {
+      // Início: fora do banner, à direita, só com a frente aparecendo
+      const peek = 0.14; // PERSONALIZAR: quanto do carro aparece antes de rolar (0 = escondido)
+      const startX = () => banner.clientWidth - car.offsetLeft - car.offsetWidth * peek;
 
-    const mm = gsap.matchMedia();
-    mm.add({
-      isMobile: "(max-width: 767.98px)",
-      isDesktop: "(min-width: 768px)", // o callback só roda se alguma condição bater
-      reduce: "(prefers-reduced-motion: reduce)"
-    }, (ctx) => {
-      const { isMobile, reduce } = ctx.conditions;
-      if (reduce) return; // movimento reduzido: carro parado e lista visível
-
-      section.classList.add("is-animated");
-
-      const startX = () => stage.clientWidth;      // fora da tela, à direita
-      const endX = () => -car.offsetWidth;          // fora da tela, à esquerda
-
-      // Rodas giram proporcionalmente ao deslocamento (anti-horário ao ir para a esquerda)
-      const spin = () => {
-        const x = gsap.getProperty(car, "x");
-        const circ = Math.PI * (wheels[0] ? wheels[0].offsetWidth : 1);
-        gsap.set(wheels, { rotation: ((x - startX()) / circ) * 360 });
-      };
-
-      gsap.set(items, { opacity: 0, y: 24 });
-      gsap.set(shieldOn, { opacity: 0, scale: 0.8, transformOrigin: "50% 60%" });
-      gsap.set(closing, { opacity: 0 });
-
-      const tl = gsap.timeline({
-        defaults: { ease: "none" },
+      gsap.fromTo(car, { x: startX }, {
+        x: 0,
+        ease: "power2.out", // desacelera ao estacionar
         scrollTrigger: {
-          trigger: section,
-          start: "top top",
-          // Distância de rolagem: menor no celular (≈200vh) que no desktop (≈300vh)
-          end: () => "+=" + window.innerHeight * (isMobile ? 2 : 3),
-          pin: true,
-          scrub: 0.5,
+          trigger: banner,
+          start: 0,
+          // PERSONALIZAR: distância de rolagem até estacionar (40% da altura do banner)
+          end: () => "+=" + banner.offsetHeight * 0.4,
+          scrub: 1,
           invalidateOnRefresh: true
         }
       });
-
-      tl.fromTo(car, { x: startX }, { x: endX, duration: 1, onUpdate: spin }, 0);
-
-      // Benefícios aparecem em sequência ao longo do trajeto
-      const step = 0.8 / items.length;
-      items.forEach((el, i) => {
-        tl.to(el, { opacity: 1, y: 0, duration: 0.06, ease: "power1.out" }, 0.04 + i * step);
-      });
-
-      // Escudo "acende" no fim do trajeto
-      tl.to(shieldOn, { opacity: 1, scale: 1, duration: 0.08, ease: "back.out(2)" }, 0.86)
-        .to(closing, { opacity: 1, duration: 0.06 }, 0.9);
-
-      return () => section.classList.remove("is-animated");
     });
   }
 
@@ -280,5 +274,5 @@
   initHeader();
   initForm();
   initDialogs();
-  initJourney();
+  initHeroCar();
 })();

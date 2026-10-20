@@ -16,15 +16,15 @@ Referência do projeto (identidade, tom de voz, scrollytelling): [`docs/referenc
 | Cores, fonte, raios, sombras e espaçamentos (tokens) | topo de `css/styles.css` |
 | Fonte do Google Fonts | `<head>` do `index.html` e `--font-base` |
 | Logo | `assets/logo.svg` |
-| Carro (carroceria e roda separadas) | `assets/carro.svg`, `assets/roda.svg` (posição das rodas: variáveis `--wheel-*` em `styles.css`) |
-| Escudos | `assets/escudo.svg`, `assets/escudo-contorno.svg`, `assets/escudo-ativo.svg` |
+| Carro do topo (fundo transparente, virado para a esquerda) | `assets/carro.webp` e `assets/carro.png` (reserva). Posição final em `.hero__car` (`styles.css`); quanto aparece antes de rolar e a distância até estacionar em `initHeroCar` (`main.js`) |
+| Escudos | `assets/escudo.svg` (marca d'água do banner), `assets/escudo-ativo.svg` (favicon) |
 | Ícones dos serviços | `assets/icons/*.svg` |
 
 Placeholders aparecem entre `[colchetes]` ou com `0000`.
 
 ## Dependências
 
-- GSAP 3.12.5 + ScrollTrigger (cdnjs, versão fixa)
+- GSAP 3.12.5 + ScrollTrigger (cdnjs, versão fixa), com cópia local em `js/vendor/` caso o CDN não carregue
 - Google Fonts (Nunito)
 
-Sem GSAP, com JavaScript desligado ou com `prefers-reduced-motion`, a seção do carro aparece estática, com a lista de benefícios visível.
+Sem JavaScript ou com `prefers-reduced-motion` (no Windows: "Efeitos de animação" desligado), o carro já aparece estacionado, sem movimento.

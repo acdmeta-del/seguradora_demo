@@ -40,34 +40,30 @@ window.SITE_CONTENT = {
     { rotulo: "Contato", ancora: "#contato" }
   ],
 
+  // Topo no estilo "banner + cartão sobreposto + painel verde"
   hero: {
+    display: "Proteção veicular.",          // texto grande no banner
     selo: "Cotação totalmente grátis",
-    tituloAntes: "Não deixe seu carro",
-    tituloDestaque: "desprotegido!",
-    subtitulo: "Proteja seu carro com a gente e fique mais tranquilo. Guincho à disposição, pane elétrica, mecânica, colisão e muito mais, com suporte 24h.",
-    formTitulo: "Faça sua cotação grátis",
-    formNota: "O valor é calculado de acordo com o veículo e o perfil. Você recebe o retorno pelo WhatsApp.",
+    titulo: "Não deixe seu carro desprotegido!",
+    subtitulo: "Proteja seu carro com a gente e fique mais tranquilo. Guincho à disposição, pane elétrica, mecânica, colisão e muito mais, com suporte 24h. O valor é calculado de acordo com o veículo e o perfil.",
+    linhaPrefixo: "Integra",               // linhas de planos: "Integra Básico", "Integra Completo"...
+    linhaLink: "Saiba mais",
+    dica: "Dica: fale com a gente pelo WhatsApp para pedir ajuda, tirar dúvidas e muito mais!",
+    // acao: "#ancora", "tel:sede" / "tel:suporte24h" (usa contatos) ou "wa:mensagem" (abre o WhatsApp)
+    atalhos: [
+      { icone: "cotacao", rotulo: "Cotação grátis", acao: "#cotacao" },
+      { icone: "suporte-24h", rotulo: "Suporte 24h", acao: "tel:suporte24h" },
+      { icone: "guincho", rotulo: "Acionar guincho", acao: "wa:Olá! Preciso acionar o guincho." },
+      { icone: "boleto", rotulo: "2ª via de boleto", acao: "wa:Olá! Preciso da 2ª via do boleto." }
+    ],
+    formTitulo: "Faça sua cotação grátis em menos de um minuto.",
+    formNota: "Você recebe o retorno pelo WhatsApp.",
     campos: {
       nome: "Seu nome",
       whatsapp: "Seu WhatsApp",
       veiculo: "Placa ou modelo do veículo"
     },
     botao: "Faça sua cotação grátis"
-  },
-
-  // Scrollytelling: a ordem aqui é a ordem em que os benefícios aparecem.
-  jornada: {
-    titulo: "Proteção do começo ao fim",
-    subtitulo: "Tudo o que acompanha você na estrada.",
-    fechamento: "Seu carro protegido.",
-    beneficios: [
-      { icone: "guincho", titulo: "Guincho", texto: "À disposição quando você precisar." },
-      { icone: "pane-eletrica", titulo: "Pane elétrica", texto: "Bateria arriou? A gente ajuda." },
-      { icone: "pane-mecanica", titulo: "Pane mecânica", texto: "Socorro para o carro que parou." },
-      { icone: "colisao", titulo: "Colisão", texto: "Amparo em caso de batida." },
-      { icone: "suporte-24h", titulo: "Suporte 24h", texto: "Atendimento a qualquer hora." },
-      { icone: "cotacao", titulo: "Cotação grátis", texto: "Sem custo e sem compromisso." }
-    ]
   },
 
   servicos: {

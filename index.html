@@ -38,85 +38,57 @@
 
   <main id="conteudo" tabindex="-1">
 
-    <!-- 2. HERO -->
+    <!-- 2. HERO: banner com o carro + cartão sobreposto + painel verde
+         O carro entra pela direita conforme a rolagem e estaciona à direita do banner.
+         Sem JS ou com movimento reduzido, ele já aparece estacionado. -->
     <section class="hero" id="inicio" aria-labelledby="hero-titulo">
-      <div class="container hero__inner">
-        <div class="hero__text">
-          <p class="eyebrow" data-text="hero.selo"></p>
-          <h1 id="hero-titulo" class="hero__title">
-            <span data-text="hero.tituloAntes"></span>
-            <em data-text="hero.tituloDestaque"></em>
-          </h1>
-          <p class="hero__subtitle" data-text="hero.subtitulo"></p>
-
-          <form class="quote-form" id="cotacao" novalidate aria-labelledby="form-titulo">
-            <h2 class="quote-form__title" id="form-titulo" data-text="hero.formTitulo"></h2>
-            <div class="field">
-              <label for="f-nome" data-text="hero.campos.nome"></label>
-              <input id="f-nome" name="nome" type="text" autocomplete="name" required>
-            </div>
-            <div class="field">
-              <label for="f-whats" data-text="hero.campos.whatsapp"></label>
-              <input id="f-whats" name="whatsapp" type="tel" inputmode="tel" autocomplete="tel" placeholder="(00) 00000-0000" required>
-            </div>
-            <div class="field">
-              <label for="f-veiculo" data-text="hero.campos.veiculo"></label>
-              <input id="f-veiculo" name="veiculo" type="text" autocomplete="off" placeholder="Ex.: ABC1D23 ou Onix 2020" required>
-            </div>
-            <p class="quote-form__error" role="alert" hidden></p>
-            <button class="btn btn--primary btn--block" type="submit">
-              <span data-icon="whatsapp"></span><span data-text="hero.botao"></span>
-            </button>
-            <p class="quote-form__note" data-text="hero.formNota"></p>
-          </form>
+      <div class="container">
+        <div class="hero__banner">
+          <img class="hero__watermark" src="assets/escudo.svg" alt="" width="200" height="240" aria-hidden="true">
+          <p class="hero__display" data-accent data-text="hero.display">Proteção veicular.</p>
+          <!-- PERSONALIZAR: foto do carro (fundo transparente, virado para a esquerda) -->
+          <picture class="hero__car" aria-hidden="true">
+            <source srcset="assets/carro.webp" type="image/webp">
+            <img src="assets/carro.png" alt="" width="674" height="370" fetchpriority="high">
+          </picture>
         </div>
 
-        <div class="hero__visual" aria-hidden="true">
-          <div class="hero__shield-bg">
-            <!-- PERSONALIZAR: escudo e carro do hero (assets/) -->
-            <img class="hero__shield" src="assets/escudo.svg" alt="" width="200" height="240">
-            <div class="car car--hero">
-              <img class="car__body" src="assets/carro.svg" alt="" width="600" height="220">
-              <img class="car__wheel car__wheel--front" src="assets/roda.svg" alt="" width="100" height="100">
-              <img class="car__wheel car__wheel--rear" src="assets/roda.svg" alt="" width="100" height="100">
+        <div class="hero__grid">
+          <div class="hero__col hero__col--main">
+            <div class="hero__intro">
+              <p class="eyebrow" data-text="hero.selo"></p>
+              <h1 id="hero-titulo" class="hero__title" data-accent data-text="hero.titulo">Não deixe seu carro desprotegido!</h1>
+              <p class="hero__subtitle" data-text="hero.subtitulo"></p>
             </div>
+            <ul class="hero__rows" data-render="linhas"></ul>
           </div>
-        </div>
-      </div>
-    </section>
 
-    <!-- 3. SCROLLYTELLING DO CARRO
-         Sem JS ou com movimento reduzido: carro parado e lista visível (este HTML).
-         Com JS: main.js recria a lista a partir de content.js e anima com GSAP. -->
-    <section class="journey" id="protecao" aria-labelledby="journey-titulo">
-      <div class="journey__stage">
-        <div class="container journey__head">
-          <h2 id="journey-titulo" class="section-title" data-text="jornada.titulo">Proteção do começo ao fim</h2>
-          <p class="section-subtitle" data-text="jornada.subtitulo">Tudo o que acompanha você na estrada.</p>
-        </div>
+          <div class="hero__col hero__col--side">
+            <div class="hero__panel">
+              <p class="hero__tip" data-text="hero.dica"></p>
+              <ul class="hero__tiles" data-render="atalhos"></ul>
+            </div>
 
-        <div class="container journey__content">
-          <ol class="journey__list" data-render="jornada">
-            <li class="journey__item"><strong>Guincho</strong></li>
-            <li class="journey__item"><strong>Pane elétrica</strong></li>
-            <li class="journey__item"><strong>Pane mecânica</strong></li>
-            <li class="journey__item"><strong>Colisão</strong></li>
-            <li class="journey__item"><strong>Suporte 24h</strong></li>
-            <li class="journey__item"><strong>Cotação grátis</strong></li>
-          </ol>
-          <div class="journey__shield" aria-hidden="true">
-            <img class="journey__shield-off" src="assets/escudo-contorno.svg" alt="" width="200" height="240">
-            <img class="journey__shield-on" src="assets/escudo-ativo.svg" alt="" width="200" height="240">
-            <p class="journey__closing" data-text="jornada.fechamento">Seu carro protegido.</p>
-          </div>
-        </div>
-
-        <div class="journey__road" aria-hidden="true">
-          <!-- PERSONALIZAR: carro do scrollytelling (assets/carro.svg + assets/roda.svg) -->
-          <div class="car car--journey">
-            <img class="car__body" src="assets/carro.svg" alt="" width="600" height="220">
-            <img class="car__wheel car__wheel--front" src="assets/roda.svg" alt="" width="100" height="100">
-            <img class="car__wheel car__wheel--rear" src="assets/roda.svg" alt="" width="100" height="100">
+            <form class="hero__cta quote-form" id="cotacao" novalidate aria-labelledby="form-titulo">
+              <h2 class="quote-form__title" id="form-titulo" data-text="hero.formTitulo"></h2>
+              <div class="field">
+                <label for="f-nome" data-text="hero.campos.nome"></label>
+                <input id="f-nome" name="nome" type="text" autocomplete="name" required>
+              </div>
+              <div class="field">
+                <label for="f-whats" data-text="hero.campos.whatsapp"></label>
+                <input id="f-whats" name="whatsapp" type="tel" inputmode="tel" autocomplete="tel" placeholder="(00) 00000-0000" required>
+              </div>
+              <div class="field">
+                <label for="f-veiculo" data-text="hero.campos.veiculo"></label>
+                <input id="f-veiculo" name="veiculo" type="text" autocomplete="off" placeholder="Ex.: ABC1D23 ou Onix 2020" required>
+              </div>
+              <p class="quote-form__error" role="alert" hidden></p>
+              <button class="btn btn--light btn--block" type="submit">
+                <span data-icon="whatsapp"></span><span data-text="hero.botao"></span>
+              </button>
+              <p class="quote-form__note" data-text="hero.formNota"></p>
+            </form>
           </div>
         </div>
       </div>
@@ -125,7 +97,7 @@
     <!-- 4. SERVIÇOS -->
     <section class="section" id="servicos" aria-labelledby="servicos-titulo">
       <div class="container">
-        <h2 id="servicos-titulo" class="section-title" data-text="servicos.titulo"></h2>
+        <h2 id="servicos-titulo" class="section-title" data-accent data-text="servicos.titulo"></h2>
         <p class="section-subtitle" data-text="servicos.subtitulo"></p>
         <ul class="services" data-render="servicos"></ul>
       </div>
@@ -134,7 +106,7 @@
     <!-- 5. COMO FUNCIONA -->
     <section class="section section--soft" id="como-funciona" aria-labelledby="passos-titulo">
       <div class="container">
-        <h2 id="passos-titulo" class="section-title" data-text="passos.titulo"></h2>
+        <h2 id="passos-titulo" class="section-title" data-accent data-text="passos.titulo"></h2>
         <ol class="steps" data-render="passos"></ol>
       </div>
     </section>
@@ -142,7 +114,7 @@
     <!-- 6. PLANOS (sem preço) -->
     <section class="section" id="planos" aria-labelledby="planos-titulo">
       <div class="container">
-        <h2 id="planos-titulo" class="section-title" data-text="planos.titulo"></h2>
+        <h2 id="planos-titulo" class="section-title" data-accent data-text="planos.titulo"></h2>
         <p class="section-subtitle" data-text="planos.subtitulo"></p>
         <div class="plans" data-render="planos"></div>
         <p class="sample-note" data-text="planos.nota"></p>
@@ -152,7 +124,7 @@
     <!-- 7. DEPOIMENTOS (exemplo) -->
     <section class="section section--soft" id="depoimentos" aria-labelledby="depo-titulo">
       <div class="container">
-        <h2 id="depo-titulo" class="section-title" data-text="depoimentos.titulo"></h2>
+        <h2 id="depo-titulo" class="section-title" data-accent data-text="depoimentos.titulo"></h2>
         <p class="sample-note sample-note--top" data-text="depoimentos.nota"></p>
         <ul class="testimonials" data-render="depoimentos"></ul>
       </div>
@@ -162,7 +134,7 @@
     <section class="section" id="duvidas" aria-labelledby="faq-titulo">
       <div class="container faq-grid">
         <div>
-          <h2 id="faq-titulo" class="section-title" data-text="faq.titulo"></h2>
+          <h2 id="faq-titulo" class="section-title" data-accent data-text="faq.titulo"></h2>
           <div class="faq" data-render="faq"></div>
         </div>
         <aside class="glossary" aria-labelledby="glossario-titulo">
@@ -176,7 +148,7 @@
     <section class="section contact" id="contato" aria-labelledby="contato-titulo">
       <div class="container contact__inner">
         <div class="contact__cta">
-          <h2 id="contato-titulo" class="section-title" data-text="contato.titulo"></h2>
+          <h2 id="contato-titulo" class="section-title" data-accent data-text="contato.titulo"></h2>
           <p class="section-subtitle" data-text="contato.subtitulo"></p>
           <a class="btn btn--dark btn--lg" data-wa href="#">
             <span data-icon="whatsapp"></span><span data-text="contato.botao"></span>
@@ -238,6 +210,11 @@
   <script src="content/content.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
+  <!-- Reserva local do GSAP (mesma versão) caso o CDN não carregue ou o site abra offline -->
+  <script>
+    window.gsap || document.write('<script src="js/vendor/gsap-3.12.5.min.js"><\/script>');
+    window.ScrollTrigger || document.write('<script src="js/vendor/ScrollTrigger-3.12.5.min.js"><\/script>');
+  </script>
   <script src="js/main.js"></script>
 </body>
 </html>
