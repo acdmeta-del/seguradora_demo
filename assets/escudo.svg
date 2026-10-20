@@ -1,0 +1,5 @@
+<!-- ESCUDO: símbolo de proteção (branco com contorno), usado sobre fundo verde no hero. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 240" width="200" height="240" aria-hidden="true">
+  <path d="M100 6 L188 38 V112 C188 172 150 212 100 234 C50 212 12 172 12 112 V38 Z" fill="#FFFFFF"/>
+  <path d="M100 24 L172 50 V112 C172 162 140 196 100 214 C60 196 28 162 28 112 V50 Z" fill="none" stroke="#E8E8E8" stroke-width="6"/>
+</svg>

@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48" fill="none" stroke="#606060" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+  <!-- Guincho -->
+  <path d="M4 32 V22 H18 L22 14 H30 V32"/>
+  <path d="M30 32 H44 V28 L34 18"/>
+  <path d="M34 18 L40 12" stroke="#98C61D"/>
+  <path d="M40 12 V18" stroke="#98C61D"/>
+  <circle cx="12" cy="34" r="4"/><circle cx="36" cy="34" r="4"/>
+  <path d="M8 22 V16 H16" stroke="#98C61D"/>
+</svg>

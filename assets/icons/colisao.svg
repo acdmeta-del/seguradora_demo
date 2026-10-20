@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48" fill="none" stroke="#606060" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+  <!-- Colisão: carro com marca de impacto -->
+  <path d="M6 32 V26 L10 18 H28 L34 26 H38 C40 26 42 28 42 30 V32 Z"/>
+  <circle cx="14" cy="34" r="3.5"/><circle cx="34" cy="34" r="3.5"/>
+  <path d="M40 8 L38 14 L44 13 L39 17" stroke="#98C61D"/>
+  <path d="M33 6 L34 12" stroke="#98C61D"/>
+</svg>

@@ -1,0 +1,21 @@
+<!-- CARRO PROVISÓRIO (carroceria sem rodas), de perfil e virado para a esquerda.
+     As rodas ficam em assets/roda.svg e são posicionadas pelo CSS (.car__wheel).
+     Para trocar: manter viewBox 600x220 e os vãos das rodas em x=140 e x=450, y=170, r=46,
+     ou ajustar as variáveis de roda (wheel) em css/styles.css. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 220" width="600" height="220" aria-hidden="true">
+  <ellipse cx="300" cy="210" rx="270" ry="9" fill="#000" opacity="0.12"/>
+  <!-- Carroceria -->
+  <path d="M30 160 C30 132 42 120 72 114 L176 100 C204 72 236 50 276 46 L398 44 C440 44 472 62 504 96 L556 106 C576 110 584 126 584 148 L584 162 C584 168 580 172 574 172 L504 172 A54 54 0 0 0 396 172 L194 172 A54 54 0 0 0 86 172 L42 172 C34 172 30 168 30 160 Z" fill="#4A4F55"/>
+  <!-- Faixa lateral na cor da marca -->
+  <path d="M40 140 L584 136 L584 146 L38 150 Z" fill="#98C61D"/>
+  <!-- Vidros -->
+  <path d="M196 100 C220 76 246 62 278 59 L334 58 L334 100 Z" fill="#CFDCE6"/>
+  <path d="M346 58 L396 58 C428 59 452 74 476 100 L346 100 Z" fill="#CFDCE6"/>
+  <path d="M340 56 L340 170" stroke="#3A3E43" stroke-width="3"/>
+  <!-- Retrovisor, maçanetas, farol e lanterna -->
+  <path d="M192 104 L210 98 L214 110 L196 112 Z" fill="#3A3E43"/>
+  <rect x="300" y="112" width="22" height="5" rx="2.5" fill="#2E3237"/>
+  <rect x="420" y="112" width="22" height="5" rx="2.5" fill="#2E3237"/>
+  <path d="M36 128 C40 121 52 118 66 118 L68 130 L38 134 Z" fill="#F4F4F4"/>
+  <rect x="566" y="114" width="16" height="16" rx="4" fill="#C8463D"/>
+</svg>
