@@ -16,15 +16,16 @@ Referência do projeto (identidade, tom de voz, scrollytelling): [`docs/referenc
 | Cores, fonte, raios, sombras e espaçamentos (tokens) | topo de `css/styles.css` |
 | Fonte do Google Fonts | `<head>` do `index.html` e `--font-base` |
 | Logo | `assets/logo.svg` |
-| Carro do topo (fundo transparente, virado para a esquerda) | `assets/carro.webp` e `assets/carro.png` (reserva). Posição final em `.hero__car` (`styles.css`); quanto aparece antes de rolar e a distância até estacionar em `initHeroCar` (`main.js`) |
-| Escudos | `assets/escudo.svg` (marca d'água do banner), `assets/escudo-ativo.svg` (favicon) |
+| Carro do topo (fundo transparente, virado para a esquerda) | `assets/carro.webp` e `assets/carro.png` (reserva). Posição final em `.hero__car` (`styles.css`); duração e atraso da entrada em `CAR_INTRO` (`main.js`) |
+| Marca d'água do banner | `assets/marca-dagua.webp` e `.png` (versão branca do selo `assets/selo-integra.png`); opacidade em `.hero__watermark` |
+| Favicon | `assets/escudo-ativo.svg` |
 | Ícones dos serviços | `assets/icons/*.svg` |
 
 Placeholders aparecem entre `[colchetes]` ou com `0000`.
 
 ## Dependências
 
-- GSAP 3.12.5 + ScrollTrigger (cdnjs, versão fixa), com cópia local em `js/vendor/` caso o CDN não carregue
+- GSAP 3.12.5 (cdnjs, versão fixa), com cópia local em `js/vendor/` caso o CDN não carregue
 - Google Fonts (Nunito)
 
-Sem JavaScript ou com `prefers-reduced-motion` (no Windows: "Efeitos de animação" desligado), o carro já aparece estacionado, sem movimento.
+O carro entra pela direita assim que a página carrega. Sem JavaScript ou com movimento reduzido no sistema (Windows 10: Configurações > Facilidade de Acesso > Tela > "Mostrar animações no Windows" desligado), ele já aparece estacionado.

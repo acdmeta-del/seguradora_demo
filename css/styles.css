@@ -243,7 +243,9 @@ main:focus { outline: none; }
   height: 16%;
   background: linear-gradient(rgba(0, 0, 0, 0), rgba(0, 0, 0, .16));
 }
-.hero__watermark { position: absolute; right: -6%; top: -14%; width: 48%; max-width: 360px; opacity: .12; }
+/* Marca d'água: selo da Integra em branco translúcido (assets/marca-dagua.*) */
+.hero__watermark { position: absolute; right: -8%; top: -10%; width: 56%; max-width: 420px; opacity: .35; pointer-events: none; }
+.hero__watermark img { width: 100%; height: auto; }
 .hero__display {
   position: absolute;
   left: var(--space-5);
@@ -257,9 +259,10 @@ main:focus { outline: none; }
   letter-spacing: -0.035em;
 }
 .hero__display .accent { color: var(--color-brand); }
-/* Posição FINAL (estacionado). O JS só desloca com transform a partir da direita. */
+/* Posição FINAL (estacionado). Ao carregar, o JS faz o carro entrar pela direita até aqui. */
 .hero__car { position: absolute; z-index: 1; right: -3%; bottom: 3%; width: 80%; will-change: transform; }
 .hero__car img { width: 100%; height: auto; filter: drop-shadow(0 16px 14px rgba(0, 0, 0, .28)); }
+.car-intro .hero__car { visibility: hidden; } /* até a animação começar (ver <head>) */
 
 /* Grade abaixo do banner. No celular as colunas "somem" (display: contents)
    para reordenar: texto, formulário, atalhos, planos. */
@@ -360,7 +363,7 @@ main:focus { outline: none; }
   .hero__banner { height: 520px; }
   .hero__display { left: calc(var(--card-indent) + var(--space-7)); top: 56px; }
   .hero__car { width: 42%; right: 2%; bottom: 0; }
-  .hero__watermark { right: 4%; }
+  .hero__watermark { right: 6%; top: -8%; width: 40%; }
 
   .hero__grid { position: relative; z-index: 2; flex-direction: row; align-items: flex-start; gap: 0; margin-top: calc(-1 * var(--overlap)); }
   .hero__col { display: flex; flex-direction: column; }

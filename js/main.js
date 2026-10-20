@@ -2,7 +2,7 @@
  * Integra Proteção Veicular: script principal.
  * 1) Preenche a página com os textos de content/content.js
  * 2) Menu, formulário de cotação (abre o WhatsApp) e diálogo de privacidade
- * 3) Scrollytelling do carro com GSAP + ScrollTrigger
+ * 3) Entrada do carro no banner ao carregar a página (GSAP)
  * PERSONALIZAR: textos e contatos ficam em content/content.js, não aqui.
  */
 (function () {
@@ -236,38 +236,41 @@
     });
   }
 
-  /* ---------- Entrada do carro no banner (scroll-linked) ----------
-   * Rolar para baixo: o carro entra pela direita e desacelera até estacionar
-   * um pouco à direita do banner (posição definida no CSS em .hero__car).
-   * Rolar para cima: ele volta pelo mesmo caminho. Parou de rolar, o carro para (scrub).
-   * Sem GSAP ou com prefers-reduced-motion: o carro já aparece estacionado.
+  /* ---------- Entrada do carro no banner (ao carregar a página) ----------
+   * O carro começa fora do banner, à direita, e anda até a posição final
+   * definida no CSS (.hero__car), desacelerando ao estacionar. Não depende da rolagem.
+   * Com prefers-reduced-motion ou sem GSAP: o carro já aparece estacionado.
    */
+  const CAR_INTRO = {
+    duration: 1.8,      // PERSONALIZAR: duração da entrada, em segundos
+    delay: 0.3,         // espera antes de começar
+    ease: "power3.out"  // desacelera ao estacionar
+  };
+
   function initHeroCar() {
+    const root = document.documentElement;
     const banner = $(".hero__banner");
     const car = $(".hero__car");
-    if (!banner || !car || !window.gsap || !window.ScrollTrigger) return;
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const show = () => root.classList.remove("car-intro");
 
-    gsap.registerPlugin(ScrollTrigger);
-    ScrollTrigger.config({ ignoreMobileResize: true });
+    if (!banner || !car || !window.gsap || reduce) { show(); return; }
 
-    gsap.matchMedia().add("(prefers-reduced-motion: no-preference)", () => {
-      // Início: fora do banner, à direita, só com a frente aparecendo
-      const peek = 0.14; // PERSONALIZAR: quanto do carro aparece antes de rolar (0 = escondido)
-      const startX = () => banner.clientWidth - car.offsetLeft - car.offsetWidth * peek;
+    const img = $("img", car);
+    const run = () => {
+      // Distância até ficar totalmente fora do banner, à direita
+      const startX = banner.clientWidth - car.offsetLeft;
+      gsap.set(car, { x: startX });
+      show();
+      gsap.to(car, { x: 0, duration: CAR_INTRO.duration, delay: CAR_INTRO.delay, ease: CAR_INTRO.ease, clearProps: "transform" });
+    };
 
-      gsap.fromTo(car, { x: startX }, {
-        x: 0,
-        ease: "power2.out", // desacelera ao estacionar
-        scrollTrigger: {
-          trigger: banner,
-          start: 0,
-          // PERSONALIZAR: distância de rolagem até estacionar (40% da altura do banner)
-          end: () => "+=" + banner.offsetHeight * 0.4,
-          scrub: 1,
-          invalidateOnRefresh: true
-        }
-      });
-    });
+    // Espera a imagem carregar para o carro não entrar "vazio"
+    if (img.complete) run();
+    else {
+      img.addEventListener("load", run, { once: true });
+      img.addEventListener("error", show, { once: true });
+    }
   }
 
   render();
