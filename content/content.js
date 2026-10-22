@@ -49,12 +49,13 @@ window.SITE_CONTENT = {
     linhaPrefixo: "Integra",               // linhas de planos: "Integra Básico", "Integra Completo"...
     linhaLink: "Saiba mais",
     dica: "Dica: fale com a gente pelo WhatsApp para pedir ajuda, tirar dúvidas e muito mais!",
-    // acao: "#ancora", "tel:sede" / "tel:suporte24h" (usa contatos) ou "wa:mensagem" (abre o WhatsApp)
+    // acao: "#ancora", "tel:sede" / "tel:suporte24h" (usa contatos), "wa:mensagem" (abre o WhatsApp)
+    //       ou "dialog:id" (abre o pop-up <dialog id="id"> do index.html)
     atalhos: [
       { icone: "cotacao", rotulo: "Cotação grátis", acao: "#cotacao" },
       { icone: "suporte-24h", rotulo: "Suporte 24h", acao: "tel:suporte24h" },
       { icone: "guincho", rotulo: "Acionar guincho", acao: "wa:Olá! Preciso acionar o guincho." },
-      { icone: "boleto", rotulo: "2ª via de boleto", acao: "wa:Olá! Preciso da 2ª via do boleto." }
+      { icone: "boleto", rotulo: "2ª via de boleto", acao: "dialog:boleto" }
     ],
     formTitulo: "Faça sua cotação grátis em menos de um minuto.",
     formNota: "Você recebe o retorno pelo WhatsApp.",
@@ -156,11 +157,36 @@ window.SITE_CONTENT = {
     botao: "Chamar no WhatsApp"
   },
 
+  // Pop-up "2ª via de boleto" (consulta ao SGA pelo intermediário em server/)
+  boleto: {
+    titulo: "2ª via de boleto",
+    texto: "Informe a placa do veículo e o CPF do titular. Se os dados estiverem corretos, enviamos a 2ª via para o WhatsApp cadastrado.",
+    campos: { placa: "Placa do veículo", cpf: "CPF do titular" },
+    botao: "Enviar 2ª via",
+    enviando: "Consultando...",
+    aviso: "Usamos placa e CPF apenas para localizar seu boleto. Nada fica salvo neste site.",
+    erros: {
+      placa: "Informe uma placa válida (ex.: ABC1D23).",
+      cpf: "Informe um CPF válido.",
+      humano: "Confirme que você não é um robô e tente de novo.",
+      limite: "Muitas tentativas. Aguarde alguns minutos e tente de novo.",
+      geral: "Não foi possível consultar agora. Tente de novo ou fale com a gente pelo WhatsApp."
+    },
+    sucesso: "Pronto! Se os dados estiverem corretos e houver boleto em aberto, a 2ª via chega no WhatsApp cadastrado em instantes.",
+    // PERSONALIZAR: URL do intermediário no Easypanel, ex.: "https://boleto-integra.xxxx.easypanel.host/api/boleto".
+    // Vazio = modo demonstração (resposta simulada no navegador, sem consulta real).
+    endpoint: "",
+    // PERSONALIZAR: chave de SITE do Cloudflare Turnstile (pública). A chave SECRETA vai só no servidor.
+    // "1x00000000000000000000AA" é a chave de teste da Cloudflare (sempre aprova).
+    turnstileSiteKey: "1x00000000000000000000AA"
+  },
+
   privacidade: {
     titulo: "Política de privacidade",
     texto: [
       "[Texto da política de privacidade a ser fornecido pela empresa, em conformidade com a LGPD (Lei 13.709/2018).]",
       "Os dados do formulário de cotação (nome, WhatsApp e veículo) não são armazenados por este site. Eles são enviados apenas na mensagem que você mesmo envia pelo WhatsApp.",
+      "Na 2ª via de boleto, placa e CPF são usados só para localizar o boleto no sistema da associação e enviá-lo ao WhatsApp cadastrado. A verificação anti-robô usa o Cloudflare Turnstile.",
       "Encarregado de dados: [nome], [e-mail do encarregado]."
     ]
   }

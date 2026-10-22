@@ -63,13 +63,17 @@
         </a>
       </li>`).join(""),
 
-    // Atalhos do painel verde
+    // Atalhos do painel verde ("dialog:id" vira botão que abre o pop-up)
     atalhos: () => C.hero.atalhos.map((a) => {
+      const conteudo = `${iconImg(a.icone, 32)}<span>${esc(a.rotulo)}</span>`;
+      if (a.acao.startsWith("dialog:")) {
+        return `<li><button class="hero__tile" type="button" data-open="${esc(a.acao.slice(7))}" aria-haspopup="dialog">${conteudo}</button></li>`;
+      }
       const ext = a.acao.startsWith("wa:");
       return `
       <li>
         <a class="hero__tile" href="${esc(actionHref(a.acao))}"${ext ? ' target="_blank" rel="noopener"' : ""}>
-          ${iconImg(a.icone, 32)}<span>${esc(a.rotulo)}</span>
+          ${conteudo}
         </a>
       </li>`;
     }).join(""),
@@ -226,13 +230,145 @@
     });
   }
 
-  /* ---------- Diálogo de privacidade ---------- */
+  /* ---------- Diálogos (privacidade, 2ª via de boleto) ---------- */
   function initDialogs() {
     $$("[data-open]").forEach((btn) => {
       const dialog = document.getElementById(btn.dataset.open);
       if (!dialog || typeof dialog.showModal !== "function") return;
-      btn.addEventListener("click", () => dialog.showModal());
+      btn.addEventListener("click", () => {
+        dialog.showModal();
+        dialog.dispatchEvent(new Event("abrir"));
+      });
+    });
+    $$("dialog").forEach((dialog) => {
       dialog.addEventListener("click", (e) => { if (e.target === dialog) dialog.close(); });
+      $$("[data-close]", dialog).forEach((b) => b.addEventListener("click", () => dialog.close()));
+    });
+  }
+
+  /* ---------- 2ª via de boleto ----------
+   * A validação aqui é só para ajudar quem digita. A validação que protege
+   * (lista de permissão, anti-robô, limites) é feita de novo no servidor (server/).
+   * Sem "endpoint" em content.js: modo demonstração, resposta simulada.
+   */
+  const PLACA_RE = /^[A-Z]{3}[0-9][A-Z0-9][0-9]{2}$/;
+  function cpfValido(d) {
+    if (!/^\d{11}$/.test(d) || /^(\d)\1{10}$/.test(d)) return false;
+    const dv = (len) => {
+      let soma = 0;
+      for (let i = 0; i < len; i++) soma += Number(d[i]) * (len + 1 - i);
+      const r = (soma * 10) % 11;
+      return r === 10 ? 0 : r;
+    };
+    return dv(9) === Number(d[9]) && dv(10) === Number(d[10]);
+  }
+
+  function initBoleto() {
+    const dialog = $("#boleto");
+    const B = C.boleto;
+    if (!dialog || !B) return;
+
+    const form = $(".boleto-form", dialog);
+    const placa = $("#b-placa", form);
+    const cpf = $("#b-cpf", form);
+    const erro = $(".quote-form__error", form);
+    const ok = $(".boleto-form__ok", form);
+    const botao = $('button[type="submit"]', form);
+    const caixaCaptcha = $("#boleto-turnstile", form);
+    const usarServidor = Boolean(B.endpoint);
+    let widget = null;
+    let token = "";
+
+    // Máscaras: placa em maiúsculas sem símbolos; CPF 000.000.000-00
+    placa.addEventListener("input", () => { placa.value = placa.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 7); });
+    cpf.addEventListener("input", () => {
+      const d = digits(cpf.value).slice(0, 11);
+      let out = d.slice(0, 3);
+      if (d.length > 3) out += "." + d.slice(3, 6);
+      if (d.length > 6) out += "." + d.slice(6, 9);
+      if (d.length > 9) out += "-" + d.slice(9);
+      cpf.value = out;
+    });
+
+    // Turnstile: carregado só quando o pop-up abre, e só se houver servidor
+    function carregarTurnstile() {
+      if (!usarServidor || widget !== null) return;
+      const desenhar = () => {
+        widget = window.turnstile.render(caixaCaptcha, {
+          sitekey: B.turnstileSiteKey,
+          action: "boleto",
+          language: "pt-br",
+          callback: (t) => { token = t; },
+          "expired-callback": () => { token = ""; },
+          "error-callback": () => { token = ""; }
+        });
+      };
+      if (window.turnstile) return desenhar();
+      window.onTurnstileCarregado = desenhar;
+      const s = document.createElement("script");
+      s.src = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit&onload=onTurnstileCarregado";
+      s.async = true;
+      document.head.appendChild(s);
+    }
+
+    const mostrar = (el, texto) => { el.textContent = texto; el.hidden = false; };
+    const limpar = () => {
+      erro.hidden = true;
+      ok.hidden = true;
+      [placa, cpf].forEach((f) => f.removeAttribute("aria-invalid"));
+    };
+    const falhar = (texto, campo) => {
+      mostrar(erro, texto);
+      if (campo) { campo.setAttribute("aria-invalid", "true"); campo.focus(); }
+    };
+
+    dialog.addEventListener("abrir", () => {
+      limpar();
+      carregarTurnstile();
+      placa.focus();
+    });
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      limpar();
+      const p = placa.value.trim();
+      const c = digits(cpf.value);
+      if (!PLACA_RE.test(p)) return falhar(B.erros.placa, placa);
+      if (!cpfValido(c)) return falhar(B.erros.cpf, cpf);
+      if (usarServidor && !token) return falhar(B.erros.humano);
+
+      botao.disabled = true;
+      botao.textContent = B.enviando;
+      form.setAttribute("aria-busy", "true");
+      try {
+        if (!usarServidor) {
+          await new Promise((r) => setTimeout(r, 900)); // demonstração
+          mostrar(ok, B.sucesso);
+        } else {
+          const r = await fetch(B.endpoint, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ placa: p, cpf: c, token }),
+            credentials: "omit"
+          });
+          const dados = await r.json().catch(() => ({}));
+          if (r.ok) mostrar(ok, B.sucesso);
+          else if (r.status === 429) falhar(B.erros.limite);
+          else if (r.status === 403) falhar(B.erros.humano);
+          else if (r.status === 400 && dados.campo === "placa") falhar(B.erros.placa, placa);
+          else if (r.status === 400 && dados.campo === "cpf") falhar(B.erros.cpf, cpf);
+          else falhar(B.erros.geral);
+        }
+        if (!ok.hidden) form.reset();
+      } catch {
+        falhar(B.erros.geral);
+      } finally {
+        botao.disabled = false;
+        botao.textContent = B.botao;
+        form.removeAttribute("aria-busy");
+        // O token do Turnstile é de uso único: gera outro para a próxima tentativa
+        if (widget !== null && window.turnstile) { window.turnstile.reset(widget); token = ""; }
+      }
     });
   }
 
@@ -277,5 +413,6 @@
   initHeader();
   initForm();
   initDialogs();
+  initBoleto();
   initHeroCar();
 })();

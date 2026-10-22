@@ -1,0 +1,152 @@
+/*
+ * Cliente do SGA Hinova (API v2).
+ *
+ * Autenticação no padrão do SGA: o token da associação (HINOVA_TOKEN) vai no
+ * cabeçalho Authorization para gerar um token de usuário com HINOVA_USUARIO e
+ * HINOVA_SENHA. Esse token fica em cache na memória e é renovado ao expirar ou
+ * ao receber 401.
+ *
+ * Os caminhos e nomes de campos vêm da configuração (config.js) porque precisam
+ * ser conferidos na documentação do SGA do cliente. Use "npm run testar-hinova".
+ *
+ * Placa e CPF chegam aqui já validados (validar.js) e entram codificados no
+ * caminho (encodeURIComponent), nunca como texto livre.
+ */
+const TOKEN_TTL_MS = 50 * 60 * 1000;
+
+// Lê o primeiro campo existente de uma lista ("a", "a.b")
+export function pegar(obj, caminhos) {
+  for (const c of caminhos) {
+    const v = c.split(".").reduce((o, k) => (o == null ? undefined : o[k]), obj);
+    if (v !== undefined && v !== null && v !== "") return v;
+  }
+  return undefined;
+}
+
+// Respostas podem vir como objeto, lista ou { dados: [...] }
+export function comoLista(resposta) {
+  if (Array.isArray(resposta)) return resposta;
+  if (resposta && typeof resposta === "object") {
+    const lista = Object.values(resposta).find(Array.isArray);
+    return lista || [resposta];
+  }
+  return [];
+}
+
+const semAcento = (s) => String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toUpperCase();
+
+// "dd/mm/aaaa" ou "aaaa-mm-dd" → número comparável
+function dataNum(v) {
+  const s = String(v || "");
+  let m = s.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+  if (m) return Number(m[3] + m[2] + m[1]);
+  m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (m) return Number(m[1] + m[2] + m[3]);
+  return Number.MAX_SAFE_INTEGER;
+}
+
+export function criarHinova(cfg, { fetchImpl = fetch, agora = Date.now } = {}) {
+  let tokenUsuario = null;
+  let tokenValidoAte = 0;
+
+  const preencher = (modelo, valores) =>
+    modelo.replace(/\{(\w+)\}/g, (_, k) => encodeURIComponent(valores[k] ?? ""));
+
+  async function chamar(metodo, caminho, { body, auth } = {}) {
+    const r = await fetchImpl(cfg.baseUrl + caminho, {
+      method: metodo,
+      headers: { Accept: "application/json", "Content-Type": "application/json", Authorization: `Bearer ${auth}` },
+      body: body ? JSON.stringify(body) : undefined,
+      signal: AbortSignal.timeout(cfg.timeoutMs)
+    });
+    const texto = await r.text();
+    let dados = null;
+    try { dados = texto ? JSON.parse(texto) : null; } catch { dados = null; }
+    return { status: r.status, dados };
+  }
+
+  async function autenticar(forcar = false) {
+    if (!forcar && tokenUsuario && agora() < tokenValidoAte) return tokenUsuario;
+    const { status, dados } = await chamar("POST", cfg.pathAutenticar, {
+      auth: cfg.token,
+      body: { usuario: cfg.usuario, senha: cfg.senha }
+    });
+    const t = pegar(dados, cfg.campos.tokenUsuario);
+    if (status >= 400 || !t) throw new Error(`Hinova: falha na autenticação (HTTP ${status})`);
+    tokenUsuario = t;
+    tokenValidoAte = agora() + TOKEN_TTL_MS;
+    return t;
+  }
+
+  // GET autenticado, com uma nova tentativa se o token expirou
+  async function get(caminho) {
+    let auth = await autenticar();
+    let resp = await chamar("GET", caminho, { auth });
+    if (resp.status === 401) {
+      auth = await autenticar(true);
+      resp = await chamar("GET", caminho, { auth });
+    }
+    if (resp.status === 404) return { status: 404, dados: null };
+    if (resp.status >= 400) throw new Error(`Hinova: erro HTTP ${resp.status} em ${caminho.split("/").slice(0, 3).join("/")}`);
+    return resp;
+  }
+
+  async function buscarVeiculo(placa) {
+    const { dados } = await get(preencher(cfg.pathVeiculo, { placa }));
+    const lista = comoLista(dados);
+    // Se vier mais de um, fica com o da placa informada
+    return lista.find((v) => String(pegar(v, cfg.campos.placa) || "").toUpperCase().replace(/\W/g, "") === placa) || lista[0] || null;
+  }
+
+  async function buscarBoletoAberto(valores) {
+    const { dados } = await get(preencher(cfg.pathBoletos, valores));
+    const fechadas = cfg.situacoesFechadas.map(semAcento);
+    const abertos = comoLista(dados).filter((b) => {
+      const sit = semAcento(pegar(b, cfg.campos.situacao));
+      return !fechadas.some((f) => sit.includes(f));
+    });
+    // O boleto em aberto com vencimento mais antigo é a 2ª via mais urgente
+    abertos.sort((a, b) => dataNum(pegar(a, cfg.campos.vencimento)) - dataNum(pegar(b, cfg.campos.vencimento)));
+    const b = abertos[0];
+    if (!b) return null;
+    return {
+      vencimento: pegar(b, cfg.campos.vencimento),
+      linhaDigitavel: pegar(b, cfg.campos.linhaDigitavel),
+      link: pegar(b, cfg.campos.link),
+      pix: pegar(b, cfg.campos.pix)
+    };
+  }
+
+  // Fluxo completo: veículo → confere titular → boleto → telefone cadastrado
+  async function consultar({ placa, cpf }) {
+    const veiculo = await buscarVeiculo(placa);
+    if (!veiculo) return { resultado: "veiculo_nao_encontrado" };
+
+    const valores = {
+      placa,
+      cpf,
+      codigo_veiculo: pegar(veiculo, cfg.campos.codigoVeiculo),
+      codigo_associado: pegar(veiculo, cfg.campos.codigoAssociado)
+    };
+    const digitos = (v) => String(v || "").replace(/\D/g, "");
+    let cpfTitular = digitos(pegar(veiculo, cfg.campos.cpf));
+    let telefone = digitos(pegar(veiculo, cfg.campos.telefone));
+
+    // Se o veículo não traz os dados do titular, busca o associado
+    if ((!cpfTitular || !telefone) && cfg.pathAssociado) {
+      const { dados } = await get(preencher(cfg.pathAssociado, valores));
+      const associado = comoLista(dados)[0] || {};
+      cpfTitular = cpfTitular || digitos(pegar(associado, cfg.campos.cpf));
+      telefone = telefone || digitos(pegar(associado, cfg.campos.telefone));
+    }
+
+    if (cpfTitular !== cpf) return { resultado: "cpf_nao_confere" };
+
+    const boleto = await buscarBoletoAberto(valores);
+    if (!boleto) return { resultado: "sem_boleto_aberto" };
+    if (!telefone) return { resultado: "sem_telefone" };
+    return { resultado: "ok", telefone, boleto };
+  }
+
+  return { autenticar, buscarVeiculo, buscarBoletoAberto, consultar, _chamar: chamar, _get: get, _preencher: preencher };
+}

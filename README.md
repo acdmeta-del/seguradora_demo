@@ -31,3 +31,38 @@ Placeholders aparecem entre `[colchetes]` ou com `0000`.
 O carro entra pela direita assim que a página carrega, sempre, mesmo com as animações do sistema desligadas (decisão do projeto). Sem JavaScript, ele já aparece estacionado.
 
 No desktop, o texto do topo acompanha a rolagem (sticky) até o fim do formulário ao lado; em telas com menos de 700 px de altura ele rola normalmente.
+
+## 2ª via de boleto (SGA Hinova)
+
+O atalho "2ª via de boleto" abre um pop-up que pede **placa** e **CPF do titular**. O site **não mostra o boleto**: um intermediário (pasta `server/`) consulta o SGA Hinova e envia a 2ª via para o **WhatsApp cadastrado** do associado.
+
+```
+Site (GitHub Pages) ──placa+CPF+token anti-robô──▶ Intermediário (VPS / Easypanel) ──▶ SGA Hinova
+                                                            └──▶ API de WhatsApp ──▶ celular cadastrado
+```
+
+Enquanto `boleto.endpoint` estiver vazio em `content/content.js`, o pop-up funciona em **modo demonstração** (resposta simulada, sem consulta).
+
+### Segurança
+
+| Risco | Proteção |
+|---|---|
+| Chave da Hinova/WhatsApp exposta | Ficam só nas variáveis de ambiente do Easypanel. O site (público) nunca as recebe. |
+| SQL injection | Validação por lista de permissão no servidor: placa só `AAA9A99`/`AAA9999`, CPF só 11 dígitos com verificador válido. Qualquer outra coisa recebe 400 antes de chamar a Hinova. Os valores vão codificados, nunca como texto livre. A proteção final é o SGA usar consultas parametrizadas (responsabilidade da Hinova). |
+| Robôs | Cloudflare Turnstile verificado no servidor + limite de 5 consultas/15 min por IP + teto global + no máximo 3 envios/dia por CPF. |
+| Descobrir quem é associado | Resposta e tempo de resposta sempre iguais, existindo ou não. Só envia se o CPF for do titular da placa, e só para o número cadastrado. |
+| Outros sites usando a API | CORS e conferência do `Origin`: só `ALLOWED_ORIGINS`. |
+| Dados pessoais em logs | CPF, placa e telefone sempre mascarados. |
+
+### Implantação do intermediário no Easypanel
+
+1. **Novo App** a partir deste repositório GitHub. Build: `Dockerfile`, caminho `server/`.
+2. **Environment**: copie as variáveis de `server/.env.example` e preencha (Hinova, Turnstile, WhatsApp). Comece com `MODO=homologacao` e seu número em `WHATSAPP_TESTE_PERMITIDOS`.
+3. **Domains**: use o subdomínio gratuito `*.easypanel.host` (HTTPS automático) apontando para a porta `3000`.
+4. **Teste a Hinova** no console do App: `npm run testar-hinova -- ABC1D23 52998224725`. Ele mostra os nomes dos campos das respostas (sem dados pessoais) para ajustar `HINOVA_PATH_*` e `HINOVA_CAMPO_*`, se preciso.
+5. **Turnstile**: no painel da Cloudflare, crie um widget para `acdmeta-del.github.io`. A chave de **site** vai em `content/content.js` (`boleto.turnstileSiteKey`); a chave **secreta**, só no Easypanel (`TURNSTILE_SECRET`).
+6. Cole a URL do App + `/api/boleto` em `boleto.endpoint` (`content/content.js`) e faça o commit.
+7. Se a Hinova restringir por IP, peça a liberação do IP da VPS.
+8. Depois de validar com seu número, mude para `MODO=producao`.
+
+Testes do intermediário: `cd server && npm install && npm test`.

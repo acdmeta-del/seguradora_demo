@@ -7,6 +7,10 @@
   <title>Integra Proteção Veicular | Cotação grátis</title>
   <meta name="description" content="Proteção veicular com guincho, pane elétrica, pane mecânica, colisão e suporte 24h. Faça sua cotação grátis pelo WhatsApp.">
   <meta name="theme-color" content="#98C61D">
+  <!-- Segurança: de onde a página pode carregar scripts e para onde pode enviar dados.
+       PERSONALIZAR: ao ter a URL definitiva do intermediário, troque https://*.easypanel.host por ela. -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' https://*.easypanel.host https://challenges.cloudflare.com; frame-src https://challenges.cloudflare.com; object-src 'none'; base-uri 'self'; form-action 'self'">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
   <link rel="icon" href="assets/escudo-ativo.svg" type="image/svg+xml">
 
   <!-- PERSONALIZAR: fonte (trocar também --font-base em css/styles.css) -->
@@ -208,6 +212,32 @@
       <h2 id="priv-titulo" data-text="privacidade.titulo"></h2>
       <div data-render="privacidade"></div>
       <form method="dialog"><button class="btn btn--primary">Fechar</button></form>
+    </div>
+  </dialog>
+
+  <!-- 2ª via de boleto: textos em content.js; consulta segura pelo intermediário em server/ -->
+  <dialog class="dialog" id="boleto" aria-labelledby="boleto-titulo" aria-describedby="boleto-texto">
+    <div class="dialog__body">
+      <h2 id="boleto-titulo" data-text="boleto.titulo"></h2>
+      <p id="boleto-texto" data-text="boleto.texto"></p>
+      <form class="boleto-form" novalidate>
+        <div class="field">
+          <label for="b-placa" data-text="boleto.campos.placa"></label>
+          <input id="b-placa" name="placa" type="text" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="8" placeholder="ABC1D23" required>
+        </div>
+        <div class="field">
+          <label for="b-cpf" data-text="boleto.campos.cpf"></label>
+          <input id="b-cpf" name="cpf" type="text" inputmode="numeric" autocomplete="off" maxlength="14" placeholder="000.000.000-00" required>
+        </div>
+        <div class="boleto-form__captcha" id="boleto-turnstile"></div>
+        <p class="quote-form__error" role="alert" hidden></p>
+        <p class="boleto-form__ok" role="status" hidden></p>
+        <div class="boleto-form__acoes">
+          <button class="btn btn--primary" type="submit" data-text="boleto.botao"></button>
+          <button class="btn btn--outline" type="button" data-close>Fechar</button>
+        </div>
+        <p class="boleto-form__aviso" data-text="boleto.aviso"></p>
+      </form>
     </div>
   </dialog>
 
