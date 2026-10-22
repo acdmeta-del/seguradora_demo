@@ -39,10 +39,17 @@ export function lerConfig(env = process.env) {
       // Padrão: "usuario" se HINOVA_USUARIO e HINOVA_SENHA estiverem preenchidos; senão "token"
       modoAuth: env.HINOVA_AUTH || (env.HINOVA_USUARIO && env.HINOVA_SENHA ? "usuario" : "token"),
       // CONFIRMAR na documentação/coleção Postman do SGA v2 do cliente.
-      // Marcadores aceitos: {placa} {cpf} {codigo_veiculo} {codigo_associado}
+      // Marcadores aceitos: {placa} {cpf} {codigo_veiculo} {codigo_associado} {codigo_boleto}
       pathAutenticar: env.HINOVA_PATH_AUTENTICAR || "/usuario/autenticar",
-      pathVeiculo: env.HINOVA_PATH_VEICULO || "/veiculo/buscar/{placa}",
-      pathBoletos: env.HINOVA_PATH_BOLETOS || "/listar/boleto-associado-veiculo/{codigo_veiculo}",
+      // Vazio = não consulta o veículo; CPF e telefone saem da lista de boletos
+      pathVeiculo: env.HINOVA_PATH_VEICULO ?? "/veiculo/buscar/{placa}",
+      // Boletos: como no n8n do cliente (POST com placa e período de vencimento)
+      pathBoletos: env.HINOVA_PATH_BOLETOS || "/listar/boleto-associado-veiculo",
+      metodoBoletos: (env.HINOVA_METODO_BOLETOS || "POST").toUpperCase(),
+      boletoDiasAntes: num(env.HINOVA_BOLETO_DIAS_ANTES, 60),   // vencidos há até N dias
+      boletoDiasDepois: num(env.HINOVA_BOLETO_DIAS_DEPOIS, 30), // vencendo nos próximos N dias
+      // Detalhe de um boleto pelo número (marcador {codigo_boleto})
+      pathBoletoDetalhe: env.HINOVA_PATH_BOLETO_DETALHE ?? "/buscar/boleto/{codigo_boleto}",
       // Opcional: busca o associado quando o veículo não traz CPF/telefone do titular
       pathAssociado: env.HINOVA_PATH_ASSOCIADO || "",
       // Nomes de campos nas respostas (lista separada por vírgula, aceita "a.b")
@@ -57,7 +64,8 @@ export function lerConfig(env = process.env) {
         linhaDigitavel: lista(env.HINOVA_CAMPO_LINHA || "linha_digitavel"),
         link: lista(env.HINOVA_CAMPO_LINK || "link_boleto,url_boleto,link"),
         pix: lista(env.HINOVA_CAMPO_PIX || "pix_copia_cola,pix"),
-        situacao: lista(env.HINOVA_CAMPO_SITUACAO || "situacao_boleto,descricao_situacao_boleto,situacao")
+        situacao: lista(env.HINOVA_CAMPO_SITUACAO || "situacao_boleto,descricao_situacao_boleto,situacao"),
+        codigoBoleto: lista(env.HINOVA_CAMPO_CODIGO_BOLETO || "nosso_numero,codigo_boleto,numero_boleto")
       },
       // Situações que NÃO são boleto em aberto (comparação sem acento, maiúsculas)
       situacoesFechadas: lista(env.HINOVA_SITUACOES_FECHADAS || "BAIXADO,PAGO,CANCELADO,LIQUIDADO"),

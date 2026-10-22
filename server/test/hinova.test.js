@@ -19,7 +19,7 @@ function apiFalsa({ expirarPrimeira = false } = {}) {
     if (caminho === "/veiculo/buscar/ABC1D23") {
       return responder(200, [{ placa: "ABC-1D23", codigo_veiculo: 77, cpf: "529.982.247-25", telefone_celular: "(11) 98765-4321" }]);
     }
-    if (caminho === "/listar/boleto-associado-veiculo/77") {
+    if (caminho === "/listar/boleto-associado-veiculo" && opt.method === "POST") {
       return responder(200, { boletos: [
         { data_vencimento: "10/09/2026", situacao_boleto: "BAIXADO", linha_digitavel: "pago" },
         { data_vencimento: "10/11/2026", situacao_boleto: "ABERTO", linha_digitavel: "novembro" },
@@ -177,4 +177,40 @@ test("config: modo token não exige usuário e senha", async () => {
   const { conferirConfig } = await import("../lib/config.js");
   assert.deepEqual(conferirConfig(lerConfig({ TURNSTILE_SECRET: "s", ALLOWED_ORIGINS: "https://a", MODO: "producao", HINOVA_TOKEN: "t" })), []);
   assert.deepEqual(conferirConfig(lerConfig({ TURNSTILE_SECRET: "s", ALLOWED_ORIGINS: "https://a", MODO: "producao", HINOVA_TOKEN: "t", HINOVA_AUTH: "usuario" })), ["HINOVA_USUARIO", "HINOVA_SENHA"]);
+});
+
+test("boletos: POST igual ao n8n (placa, período dd/mm/aaaa, link_boleto)", async () => {
+  const corpos = [];
+  const fetchImpl = async (url, opt) => { if (opt.body) corpos.push(JSON.parse(opt.body)); return { status: 200, text: async () => "[]" }; };
+  const agora = () => Date.UTC(2026, 9, 22, 15, 0, 0); // 22/10/2026
+  const h = criarHinova(lerConfig({ HINOVA_TOKEN: "t" }).hinova, { fetchImpl, agora });
+  await h.listarBoletos({ placa: "PGN3D63" });
+  assert.deepEqual(corpos[0], { placa: "PGN3D63", data_vencimento_inicial: "23/08/2026", data_vencimento_final: "21/11/2026", link_boleto: true });
+});
+
+test("boletos: busca o detalhe (/buscar/boleto/{número}) quando falta linha digitável", async () => {
+  const urls = [];
+  const fetchImpl = async (url, opt) => {
+    urls.push(`${opt.method} ${url.replace(/^https:\/\/[^/]+\/api\/sga\/v2/, "")}`);
+    if (url.endsWith("/buscar/boleto/380977")) return { status: 200, text: async () => JSON.stringify({ linha_digitavel: "LINHA", link_boleto: "https://b" }) };
+    return { status: 200, text: async () => JSON.stringify([{ nosso_numero: 380977, data_vencimento: "10/11/2026", situacao_boleto: "ABERTO" }]) };
+  };
+  const b = await criarHinova(lerConfig({ HINOVA_TOKEN: "t" }).hinova, { fetchImpl }).buscarBoletoAberto({ placa: "PGN3D63" });
+  assert.deepEqual(b, { vencimento: "10/11/2026", linhaDigitavel: "LINHA", link: "https://b", pix: undefined });
+  assert.deepEqual(urls, ["POST /listar/boleto-associado-veiculo", "GET /buscar/boleto/380977"]);
+});
+
+test("só rotas de boleto (HINOVA_PATH_VEICULO vazio): CPF e telefone vêm da lista", async () => {
+  const urls = [];
+  const fetchImpl = async (url) => {
+    urls.push(url);
+    return { status: 200, text: async () => JSON.stringify([{ cpf: "529.982.247-25", telefone_celular: "(11) 98765-4321", data_vencimento: "10/11/2026", situacao_boleto: "ABERTO", linha_digitavel: "L", link_boleto: "https://b" }]) };
+  };
+  const cfgBoleto = lerConfig({ HINOVA_TOKEN: "t", HINOVA_PATH_VEICULO: "" }).hinova;
+  const h = criarHinova(cfgBoleto, { fetchImpl });
+  const r = await h.consultar({ placa: "PGN3D63", cpf: "52998224725" });
+  assert.equal(r.resultado, "ok");
+  assert.equal(r.telefone, "11987654321");
+  assert.ok(!urls.some((u) => u.includes("/veiculo/")));
+  assert.equal((await h.consultar({ placa: "PGN3D63", cpf: "11144477735" })).resultado, "cpf_nao_confere");
 });

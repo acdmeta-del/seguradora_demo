@@ -106,29 +106,31 @@ export function criarHinova(cfg, { fetchImpl = fetch, agora = Date.now } = {}) {
     return t;
   }
 
-  // GET autenticado, com uma nova tentativa se o token expirou
-  async function get(caminho) {
+  // Chamada autenticada (GET ou POST), com nova tentativa se o token de usuário expirou
+  async function requisitar(metodo, caminho, body) {
     let auth = await autenticar();
-    let resp = await chamar("GET", caminho, { auth });
+    let resp = await chamar(metodo, caminho, { auth, body });
     if (resp.status === 401 && cfg.modoAuth === "usuario") {
       auth = await autenticar(true);
-      resp = await chamar("GET", caminho, { auth });
+      resp = await chamar(metodo, caminho, { auth, body });
     }
+    const rota = caminho.split("/").slice(0, 3).join("/");
     // A Hinova responde 404 ou 406 quando não encontra o registro
     if (resp.status === 404 || resp.status === 406) return { status: resp.status, dados: null };
     if (resp.status >= 400) {
-      const erro = new Error(`Hinova: erro HTTP ${resp.status} em ${caminho.split("/").slice(0, 3).join("/")}`);
+      const erro = new Error(`Hinova: erro HTTP ${resp.status} em ${rota}`);
       erro.diagnostico = diagnosticar(resp.status, resp.dados);
       throw erro;
     }
     // Erro com HTTP 200 ({ error: ... }), como na autenticação
     if (resp.dados && typeof resp.dados === "object" && !Array.isArray(resp.dados) && resp.dados.error) {
-      const erro = new Error(`Hinova: a API recusou a consulta em ${caminho.split("/").slice(0, 3).join("/")}`);
+      const erro = new Error(`Hinova: a API recusou a consulta em ${rota}`);
       erro.diagnostico = diagnosticar(resp.status, resp.dados);
       throw erro;
     }
     return resp;
   }
+  const get = (caminho) => requisitar("GET", caminho);
 
   async function buscarVeiculo(placa) {
     const { dados } = await get(preencher(cfg.pathVeiculo, { placa }));
@@ -137,17 +139,44 @@ export function criarHinova(cfg, { fetchImpl = fetch, agora = Date.now } = {}) {
     return lista.find((v) => String(pegar(v, cfg.campos.placa) || "").toUpperCase().replace(/\W/g, "") === placa) || lista[0] || null;
   }
 
-  async function buscarBoletoAberto(valores) {
-    const { dados } = await get(preencher(cfg.pathBoletos, valores));
+  // Data dd/mm/aaaa no fuso de Brasília, deslocada em N dias
+  const dataBr = (dias) => new Intl.DateTimeFormat("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit", year: "numeric" })
+    .format(new Date(agora() + dias * 86400000));
+
+  // Lista os boletos do veículo, como no fluxo do n8n:
+  // POST /listar/boleto-associado-veiculo { placa, data_vencimento_inicial, data_vencimento_final, link_boleto }
+  async function listarBoletos(valores) {
+    const caminho = preencher(cfg.pathBoletos, valores);
+    const { dados } = cfg.metodoBoletos === "GET"
+      ? await get(caminho)
+      : await requisitar("POST", caminho, {
+          placa: valores.placa,
+          data_vencimento_inicial: dataBr(-cfg.boletoDiasAntes),
+          data_vencimento_final: dataBr(cfg.boletoDiasDepois),
+          link_boleto: true
+        });
+    return comoLista(dados);
+  }
+
+  async function buscarBoletoAberto(valores, listaPronta) {
     const fechadas = cfg.situacoesFechadas.map(semAcento);
-    const abertos = comoLista(dados).filter((b) => {
+    const abertos = (listaPronta || (await listarBoletos(valores))).filter((b) => {
       const sit = semAcento(pegar(b, cfg.campos.situacao));
       return !fechadas.some((f) => sit.includes(f));
     });
     // O boleto em aberto com vencimento mais antigo é a 2ª via mais urgente
     abertos.sort((a, b) => dataNum(pegar(a, cfg.campos.vencimento)) - dataNum(pegar(b, cfg.campos.vencimento)));
-    const b = abertos[0];
+    let b = abertos[0];
     if (!b) return null;
+
+    // Detalhe do boleto (GET /buscar/boleto/{número}) quando a lista não traz linha digitável/link/PIX
+    const codigo = pegar(b, cfg.campos.codigoBoleto);
+    const incompleto = !pegar(b, cfg.campos.linhaDigitavel) || !(pegar(b, cfg.campos.link) || pegar(b, cfg.campos.pix));
+    if (incompleto && codigo && cfg.pathBoletoDetalhe) {
+      const { dados } = await get(preencher(cfg.pathBoletoDetalhe, { ...valores, codigo_boleto: codigo }));
+      const detalhe = comoLista(dados)[0];
+      if (detalhe && typeof detalhe === "object") b = { ...b, ...detalhe };
+    }
     return {
       vencimento: pegar(b, cfg.campos.vencimento),
       linhaDigitavel: pegar(b, cfg.campos.linhaDigitavel),
@@ -156,22 +185,30 @@ export function criarHinova(cfg, { fetchImpl = fetch, agora = Date.now } = {}) {
     };
   }
 
-  // Fluxo completo: veículo → confere titular → boleto → telefone cadastrado
+  const digitos = (v) => String(v || "").replace(/\D/g, "");
+
+  // Fluxo completo: titular confere com o CPF → boleto em aberto → telefone cadastrado.
+  // Com HINOVA_PATH_VEICULO vazio, usa só as rotas de boleto (CPF/telefone vêm da lista de boletos).
   async function consultar({ placa, cpf }) {
-    const veiculo = await buscarVeiculo(placa);
-    if (!veiculo) return { resultado: "veiculo_nao_encontrado" };
+    const valores = { placa, cpf };
+    let origem = null;
+    let lista = null;
 
-    const valores = {
-      placa,
-      cpf,
-      codigo_veiculo: pegar(veiculo, cfg.campos.codigoVeiculo),
-      codigo_associado: pegar(veiculo, cfg.campos.codigoAssociado)
-    };
-    const digitos = (v) => String(v || "").replace(/\D/g, "");
-    let cpfTitular = digitos(pegar(veiculo, cfg.campos.cpf));
-    let telefone = digitos(pegar(veiculo, cfg.campos.telefone));
+    if (cfg.pathVeiculo) {
+      origem = await buscarVeiculo(placa);
+      if (!origem) return { resultado: "veiculo_nao_encontrado" };
+      valores.codigo_veiculo = pegar(origem, cfg.campos.codigoVeiculo);
+      valores.codigo_associado = pegar(origem, cfg.campos.codigoAssociado);
+    } else {
+      lista = await listarBoletos(valores);
+      if (!lista.length) return { resultado: "sem_boleto_no_periodo" };
+      origem = lista[0];
+    }
 
-    // Se o veículo não traz os dados do titular, busca o associado
+    let cpfTitular = digitos(pegar(origem, cfg.campos.cpf));
+    let telefone = digitos(pegar(origem, cfg.campos.telefone));
+
+    // Se não vieram os dados do titular, busca o associado
     if ((!cpfTitular || !telefone) && cfg.pathAssociado) {
       const { dados } = await get(preencher(cfg.pathAssociado, valores));
       const associado = comoLista(dados)[0] || {};
@@ -179,13 +216,14 @@ export function criarHinova(cfg, { fetchImpl = fetch, agora = Date.now } = {}) {
       telefone = telefone || digitos(pegar(associado, cfg.campos.telefone));
     }
 
+    if (!cpfTitular) return { resultado: "cpf_titular_nao_encontrado" };
     if (cpfTitular !== cpf) return { resultado: "cpf_nao_confere" };
 
-    const boleto = await buscarBoletoAberto(valores);
+    const boleto = await buscarBoletoAberto(valores, lista);
     if (!boleto) return { resultado: "sem_boleto_aberto" };
     if (!telefone) return { resultado: "sem_telefone" };
     return { resultado: "ok", telefone, boleto };
   }
 
-  return { autenticar, buscarVeiculo, buscarBoletoAberto, consultar, _chamar: chamar, _get: get, _preencher: preencher };
+  return { autenticar, buscarVeiculo, listarBoletos, buscarBoletoAberto, consultar, _chamar: chamar, _get: get, _preencher: preencher };
 }
