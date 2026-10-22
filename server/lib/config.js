@@ -61,7 +61,7 @@ export function lerConfig(env = process.env) {
     },
 
     whatsapp: {
-      // log | evolution | zapi
+      // zapi (usado pelo cliente) | evolution | log (não envia, só registra)
       provedor: env.WHATSAPP_PROVIDER || "log",
       // Em MODO=homologacao, só estes números recebem mensagens (DDD + número)
       permitidosTeste: lista(env.WHATSAPP_TESTE_PERMITIDOS).map((n) => n.replace(/\D/g, "")),
@@ -85,5 +85,17 @@ export function conferirConfig(cfg) {
     if (!cfg.hinova.senha) faltando.push("HINOVA_SENHA");
   }
   if (cfg.modo === "homologacao" && !cfg.whatsapp.permitidosTeste.length) faltando.push("WHATSAPP_TESTE_PERMITIDOS");
+  const w = cfg.whatsapp;
+  if (!["log", "evolution", "zapi"].includes(w.provedor)) faltando.push("WHATSAPP_PROVIDER (log|evolution|zapi)");
+  if (w.provedor === "zapi") {
+    if (!w.zapi.instancia) faltando.push("ZAPI_INSTANCE");
+    if (!w.zapi.token) faltando.push("ZAPI_TOKEN");
+    if (!w.zapi.clientToken) faltando.push("ZAPI_CLIENT_TOKEN");
+  }
+  if (w.provedor === "evolution") {
+    if (!w.evolution.url) faltando.push("EVOLUTION_URL");
+    if (!w.evolution.instancia) faltando.push("EVOLUTION_INSTANCE");
+    if (!w.evolution.apikey) faltando.push("EVOLUTION_APIKEY");
+  }
   return faltando;
 }

@@ -3,7 +3,8 @@
  * Provedor escolhido por WHATSAPP_PROVIDER:
  *   log       → não envia; só registra (padrão, para testes)
  *   evolution → Evolution API v2 (POST /message/sendText/{instancia}, cabeçalho apikey)
- *   zapi      → Z-API (POST /instances/{id}/token/{token}/send-text, cabeçalho Client-Token)
+ *   zapi      → Z-API, usada pelo cliente (POST /instances/{id}/token/{token}/send-text,
+ *               cabeçalho Client-Token = token de segurança da conta)
  */
 import { mascararTelefone } from "./validar.js";
 
@@ -34,6 +35,10 @@ export function criarWhatsapp(cfg, { fetchImpl = fetch, log = console } = {}) {
       signal: AbortSignal.timeout(cfg.timeoutMs)
     });
     if (!r.ok) throw new Error(`WhatsApp: erro HTTP ${r.status}`);
+    // Alguns provedores respondem 200 com { error: ... } no corpo
+    const dados = await r.json().catch(() => ({}));
+    if (dados && (dados.error || dados.erro)) throw new Error("WhatsApp: o provedor recusou o envio");
+    return dados;
   }
 
   async function enviar(telefone, texto) {
@@ -49,7 +54,7 @@ export function criarWhatsapp(cfg, { fetchImpl = fetch, log = console } = {}) {
         const { instancia, token, clientToken } = cfg.zapi;
         return postar(
           `https://api.z-api.io/instances/${encodeURIComponent(instancia)}/token/${encodeURIComponent(token)}/send-text`,
-          clientToken ? { "Client-Token": clientToken } : {},
+          { "Client-Token": clientToken },
           { phone: numero, message: texto }
         );
       }

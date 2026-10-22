@@ -38,7 +38,7 @@ O atalho "2ª via de boleto" abre um pop-up que pede **placa** e **CPF do titula
 
 ```
 Site (GitHub Pages) ──placa+CPF+token anti-robô──▶ Intermediário (VPS / Easypanel) ──▶ SGA Hinova
-                                                            └──▶ API de WhatsApp ──▶ celular cadastrado
+                                                            └──▶ Z-API (WhatsApp) ──▶ celular cadastrado
 ```
 
 Enquanto `boleto.endpoint` estiver vazio em `content/content.js`, o pop-up funciona em **modo demonstração** (resposta simulada, sem consulta).
@@ -57,9 +57,11 @@ Enquanto `boleto.endpoint` estiver vazio em `content/content.js`, o pop-up funci
 ### Implantação do intermediário no Easypanel
 
 1. **Novo App** a partir deste repositório GitHub. Build: `Dockerfile`, caminho `server/`.
-2. **Environment**: copie as variáveis de `server/.env.example` e preencha (Hinova, Turnstile, WhatsApp). Comece com `MODO=homologacao` e seu número em `WHATSAPP_TESTE_PERMITIDOS`.
+2. **Environment**: copie as variáveis de `server/.env.example` e preencha (Hinova, Turnstile, Z-API). Comece com `MODO=homologacao` e seu número em `WHATSAPP_TESTE_PERMITIDOS`.
+   - **Z-API** (`WHATSAPP_PROVIDER=zapi`): `ZAPI_INSTANCE` (ID da instância), `ZAPI_TOKEN` (token da instância) e `ZAPI_CLIENT_TOKEN` (token de segurança da conta, no menu Segurança do painel). Sem os três, o servidor não sobe em produção.
 3. **Domains**: use o subdomínio gratuito `*.easypanel.host` (HTTPS automático) apontando para a porta `3000`.
 4. **Teste a Hinova** no console do App: `npm run testar-hinova -- ABC1D23 52998224725`. Ele mostra os nomes dos campos das respostas (sem dados pessoais) para ajustar `HINOVA_PATH_*` e `HINOVA_CAMPO_*`, se preciso.
+   **Teste a Z-API**: `npm run testar-whatsapp -- 11987654321` (use o seu número) envia uma mensagem de teste.
 5. **Turnstile**: no painel da Cloudflare, crie um widget para `acdmeta-del.github.io`. A chave de **site** vai em `content/content.js` (`boleto.turnstileSiteKey`); a chave **secreta**, só no Easypanel (`TURNSTILE_SECRET`).
 6. Cole a URL do App + `/api/boleto` em `boleto.endpoint` (`content/content.js`) e faça o commit.
 7. Se a Hinova restringir por IP, peça a liberação do IP da VPS.

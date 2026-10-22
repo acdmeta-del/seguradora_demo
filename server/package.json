@@ -8,7 +8,8 @@
   "scripts": {
     "start": "node server.js",
     "test": "node --test",
-    "testar-hinova": "node scripts/testar-hinova.js"
+    "testar-hinova": "node scripts/testar-hinova.js",
+    "testar-whatsapp": "node scripts/testar-whatsapp.js"
   },
   "dependencies": {
     "cors": "^2.8.5",

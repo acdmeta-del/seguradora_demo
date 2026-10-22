@@ -84,7 +84,7 @@ test("Evolution API: monta a chamada com apikey e número cadastrado", async () 
   const pedidos = [];
   const wa = criarWhatsapp(
     { ...lerConfig({}).whatsapp, provedor: "evolution", evolution: { url: "https://evo.exemplo", instancia: "integra", apikey: "chave" } },
-    { fetchImpl: async (url, opt) => { pedidos.push({ url, opt }); return { ok: true }; } }
+    { fetchImpl: async (url, opt) => { pedidos.push({ url, opt }); return { ok: true, json: async () => ({ key: { id: "1" } }) }; } }
   );
   await wa.enviar("11987654321", montarMensagem({ vencimento: "10/10/2026", linhaDigitavel: "123" }, "Integra"));
   assert.equal(pedidos[0].url, "https://evo.exemplo/message/sendText/integra");
@@ -92,4 +92,30 @@ test("Evolution API: monta a chamada com apikey e número cadastrado", async () 
   const corpo = JSON.parse(pedidos[0].opt.body);
   assert.equal(corpo.number, "5511987654321");
   assert.match(corpo.text, /Linha digitável: 123/);
+});
+
+test("Z-API: monta a chamada com instância, token e Client-Token", async () => {
+  const pedidos = [];
+  const wa = criarWhatsapp(
+    { ...lerConfig({}).whatsapp, provedor: "zapi", zapi: { instancia: "INST1", token: "TOK1", clientToken: "SEG1" } },
+    { fetchImpl: async (url, opt) => { pedidos.push({ url, opt }); return { ok: true, json: async () => ({ zaapId: "z", messageId: "m" }) }; } }
+  );
+  await wa.enviar("(11) 98765-4321", "olá");
+  assert.equal(pedidos[0].url, "https://api.z-api.io/instances/INST1/token/TOK1/send-text");
+  assert.equal(pedidos[0].opt.headers["Client-Token"], "SEG1");
+  assert.deepEqual(JSON.parse(pedidos[0].opt.body), { phone: "5511987654321", message: "olá" });
+});
+
+test("Z-API: erro no corpo com HTTP 200 vira falha", async () => {
+  const wa = criarWhatsapp(
+    { ...lerConfig({}).whatsapp, provedor: "zapi", zapi: { instancia: "I", token: "T", clientToken: "C" } },
+    { fetchImpl: async () => ({ ok: true, json: async () => ({ error: "Instance not connected" }) }) }
+  );
+  await assert.rejects(wa.enviar("11987654321", "x"), /recusou/);
+});
+
+test("config: Z-API exige as três credenciais", async () => {
+  const { conferirConfig } = await import("../lib/config.js");
+  const faltando = conferirConfig(lerConfig({ TURNSTILE_SECRET: "s", ALLOWED_ORIGINS: "https://a", MODO: "simulado", WHATSAPP_PROVIDER: "zapi", ZAPI_INSTANCE: "i" }));
+  assert.deepEqual(faltando, ["ZAPI_TOKEN", "ZAPI_CLIENT_TOKEN"]);
 });
