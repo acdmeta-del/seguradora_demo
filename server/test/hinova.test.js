@@ -119,3 +119,20 @@ test("config: Z-API exige as três credenciais", async () => {
   const faltando = conferirConfig(lerConfig({ TURNSTILE_SECRET: "s", ALLOWED_ORIGINS: "https://a", MODO: "simulado", WHATSAPP_PROVIDER: "zapi", ZAPI_INSTANCE: "i" }));
   assert.deepEqual(faltando, ["ZAPI_TOKEN", "ZAPI_CLIENT_TOKEN"]);
 });
+
+test("autenticação 200 sem token: erro com diagnóstico seguro (sem valores)", async () => {
+  const fetchImpl = async () => ({ status: 200, text: async () => JSON.stringify({ mensagem: "Usuário ou senha inválidos", sessao: "VALOR-SECRETO", codigo: 7 }) });
+  const h = criarHinova(cfg, { fetchImpl });
+  await assert.rejects(h.autenticar(), (e) => {
+    assert.match(e.message, /HTTP 200/);
+    assert.deepEqual(e.diagnostico.mensagens, ["mensagem: Usuário ou senha inválidos"]);
+    assert.ok(e.diagnostico.campos.includes("sessao: string"));
+    assert.ok(!JSON.stringify(e.diagnostico).includes("VALOR-SECRETO"));
+    return true;
+  });
+});
+
+test("autenticação aceita o token em campo alternativo (token)", async () => {
+  const fetchImpl = async () => ({ status: 200, text: async () => JSON.stringify({ token: "abc" }) });
+  assert.equal(await criarHinova(cfg, { fetchImpl }).autenticar(), "abc");
+});

@@ -43,7 +43,7 @@ export function lerConfig(env = process.env) {
       pathAssociado: env.HINOVA_PATH_ASSOCIADO || "",
       // Nomes de campos nas respostas (lista separada por vírgula, aceita "a.b")
       campos: {
-        tokenUsuario: lista(env.HINOVA_CAMPO_TOKEN_USUARIO || "token_usuario"),
+        tokenUsuario: lista(env.HINOVA_CAMPO_TOKEN_USUARIO || "token_usuario,token,access_token,dados.token_usuario,data.token_usuario"),
         cpf: lista(env.HINOVA_CAMPO_CPF || "cpf,cpf_associado,cpf_cnpj,associado.cpf"),
         telefone: lista(env.HINOVA_CAMPO_TELEFONE || "telefone_celular,celular,associado.telefone_celular,associado.celular"),
         placa: lista(env.HINOVA_CAMPO_PLACA || "placa"),

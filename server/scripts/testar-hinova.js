@@ -63,6 +63,13 @@ try {
   console.log("\nSe algum campo saiu como NÃO ENCONTRADO, ajuste as variáveis HINOVA_CAMPO_* com os nomes listados acima.");
 } catch (e) {
   console.error(`\nFalhou: ${e.message}`);
+  if (e.diagnostico) {
+    const d = e.diagnostico;
+    console.error(`  Resposta: ${d.tipo}`);
+    if (d.campos.length) console.error(`  Campos da resposta:\n    ${d.campos.join("\n    ")}`);
+    if (d.mensagens.length) console.error(`  Mensagem da Hinova:\n    ${d.mensagens.join("\n    ")}`);
+    console.error("  Se o token veio num campo com outro nome, informe-o em HINOVA_CAMPO_TOKEN_USUARIO.");
+  }
   console.error("Confira HINOVA_TOKEN, HINOVA_USUARIO, HINOVA_SENHA, os caminhos HINOVA_PATH_* e se o IP da VPS está liberado na Hinova.");
   process.exit(1);
 }

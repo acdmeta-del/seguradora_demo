@@ -45,6 +45,25 @@ function dataNum(v) {
   return Number.MAX_SAFE_INTEGER;
 }
 
+// Resumo seguro de uma resposta: campos e tipos, mais o texto de mensagens de erro.
+// Nunca inclui valores de outros campos (podem conter token ou dados pessoais).
+const CAMPOS_MENSAGEM = ["mensagem", "message", "msg", "erro", "error", "errors", "detalhe", "descricao", "retorno", "status"];
+export function diagnosticar(status, dados) {
+  const tipo = Array.isArray(dados) ? `lista[${dados.length}]` : dados === null ? "vazia ou não-JSON" : typeof dados;
+  const campos = dados && typeof dados === "object" && !Array.isArray(dados)
+    ? Object.entries(dados).map(([k, v]) => `${k}: ${Array.isArray(v) ? "lista" : v === null ? "null" : typeof v}`)
+    : [];
+  const mensagens = [];
+  if (dados && typeof dados === "object") {
+    for (const k of CAMPOS_MENSAGEM) {
+      const v = dados[k];
+      if (typeof v === "string" || typeof v === "number" || typeof v === "boolean") mensagens.push(`${k}: ${String(v).slice(0, 200)}`);
+      else if (Array.isArray(v)) mensagens.push(`${k}: ${v.filter((x) => typeof x === "string").join(" | ").slice(0, 200)}`);
+    }
+  }
+  return { status, tipo, campos, mensagens };
+}
+
 export function criarHinova(cfg, { fetchImpl = fetch, agora = Date.now } = {}) {
   let tokenUsuario = null;
   let tokenValidoAte = 0;
@@ -72,7 +91,11 @@ export function criarHinova(cfg, { fetchImpl = fetch, agora = Date.now } = {}) {
       body: { usuario: cfg.usuario, senha: cfg.senha }
     });
     const t = pegar(dados, cfg.campos.tokenUsuario);
-    if (status >= 400 || !t) throw new Error(`Hinova: falha na autenticação (HTTP ${status})`);
+    if (status >= 400 || !t || typeof t !== "string") {
+      const erro = new Error(`Hinova: falha na autenticação (HTTP ${status})`);
+      erro.diagnostico = diagnosticar(status, dados);
+      throw erro;
+    }
     tokenUsuario = t;
     tokenValidoAte = agora() + TOKEN_TTL_MS;
     return t;
