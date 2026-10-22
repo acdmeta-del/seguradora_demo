@@ -54,12 +54,15 @@ export function diagnosticar(status, dados) {
     ? Object.entries(dados).map(([k, v]) => `${k}: ${Array.isArray(v) ? "lista" : v === null ? "null" : typeof v}`)
     : [];
   const mensagens = [];
-  if (dados && typeof dados === "object") {
-    for (const k of CAMPOS_MENSAGEM) {
-      const v = dados[k];
-      if (typeof v === "string" || typeof v === "number" || typeof v === "boolean") mensagens.push(`${k}: ${String(v).slice(0, 200)}`);
-      else if (Array.isArray(v)) mensagens.push(`${k}: ${v.filter((x) => typeof x === "string").join(" | ").slice(0, 200)}`);
-    }
+  // Texto de um campo de mensagem: valores simples, listas e objetos aninhados (até 3 níveis)
+  const textos = (v, prefixo, nivel = 0) => {
+    if (v == null || nivel > 3) return;
+    if (["string", "number", "boolean"].includes(typeof v)) mensagens.push(`${prefixo}: ${String(v).slice(0, 200)}`);
+    else if (Array.isArray(v)) v.slice(0, 10).forEach((x, i) => textos(x, `${prefixo}[${i}]`, nivel + 1));
+    else if (typeof v === "object") Object.entries(v).slice(0, 20).forEach(([k, x]) => textos(x, `${prefixo}.${k}`, nivel + 1));
+  };
+  if (dados && typeof dados === "object" && !Array.isArray(dados)) {
+    for (const k of CAMPOS_MENSAGEM) textos(dados[k], k);
   }
   return { status, tipo, campos, mensagens };
 }

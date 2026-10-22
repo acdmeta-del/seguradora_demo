@@ -136,3 +136,9 @@ test("autenticação aceita o token em campo alternativo (token)", async () => {
   const fetchImpl = async () => ({ status: 200, text: async () => JSON.stringify({ token: "abc" }) });
   assert.equal(await criarHinova(cfg, { fetchImpl }).autenticar(), "abc");
 });
+
+test("diagnóstico lê mensagens dentro de error como objeto ou lista", async () => {
+  const { diagnosticar } = await import("../lib/hinova.js");
+  const d = diagnosticar(200, { error: { mensagem: "Token inválido", codigo: 401, lista: ["Usuário bloqueado"] } });
+  assert.deepEqual(d.mensagens, ["error.mensagem: Token inválido", "error.codigo: 401", "error.lista[0]: Usuário bloqueado"]);
+});
