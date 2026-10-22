@@ -214,3 +214,10 @@ test("só rotas de boleto (HINOVA_PATH_VEICULO vazio): CPF e telefone vêm da li
   assert.ok(!urls.some((u) => u.includes("/veiculo/")));
   assert.equal((await h.consultar({ placa: "PGN3D63", cpf: "11144477735" })).resultado, "cpf_nao_confere");
 });
+
+test("credenciais: remove espaços nas pontas e \"Bearer \" colado no token", () => {
+  const c = lerConfig({ HINOVA_TOKEN: "  Bearer abc123 \n", HINOVA_USUARIO: " api ", HINOVA_SENHA: "s" }).hinova;
+  assert.equal(c.token, "abc123");
+  assert.equal(c.usuario, "api");
+  assert.equal(c.modoAuth, "usuario");
+});

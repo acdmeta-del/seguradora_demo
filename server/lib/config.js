@@ -2,6 +2,8 @@
  * Configuração lida das variáveis de ambiente (no Easypanel: aba Environment).
  * Nenhuma chave fica no código ou no repositório. Ver .env.example.
  */
+// Credencial colada no painel: remove espaços nas pontas e um "Bearer " colado por engano
+const credencial = (v) => String(v || "").trim().replace(/^Bearer\s+/i, "");
 const lista = (v) => String(v || "").split(",").map((s) => s.trim()).filter(Boolean);
 const num = (v, padrao) => (Number.isFinite(Number(v)) && v !== "" && v != null ? Number(v) : padrao);
 
@@ -31,8 +33,8 @@ export function lerConfig(env = process.env) {
 
     hinova: {
       baseUrl: (env.HINOVA_BASE_URL || "https://api.hinova.com.br/api/sga/v2").replace(/\/+$/, ""),
-      token: env.HINOVA_TOKEN || "",
-      usuario: env.HINOVA_USUARIO || "",
+      token: credencial(env.HINOVA_TOKEN),
+      usuario: String(env.HINOVA_USUARIO || "").trim(),
       senha: env.HINOVA_SENHA || "",
       // token   → o token da associação vai direto no Authorization (como no n8n)
       // usuario → troca token + usuário/senha por um token_usuario (/usuario/autenticar)

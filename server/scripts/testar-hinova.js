@@ -46,6 +46,25 @@ function falhou(e) {
 }
 const etapa = (n, t) => console.log(`\n[${n}] ${t}`);
 
+// 0. Conferência das credenciais (só tamanhos e sinais de erro de cópia, nunca os valores)
+etapa(0, "Credenciais configuradas");
+function conferir(nome, bruto, usado) {
+  if (!bruto) return console.log(`  ${nome}: VAZIO`);
+  const avisos = [];
+  if (bruto !== bruto.trim()) avisos.push("tinha espaço nas pontas (removido)");
+  if (/^["']|["']$/.test(bruto.trim())) avisos.push("ATENÇÃO: começa ou termina com aspas");
+  if (/^Bearer\s/i.test(bruto.trim())) avisos.push("tinha \"Bearer\" no início (removido)");
+  if (/\s/.test(usado)) avisos.push("ATENÇÃO: tem espaço no meio");
+  console.log(`  ${nome}: ${usado.length} caracteres${avisos.length ? " | " + avisos.join("; ") : ""}`);
+}
+conferir("HINOVA_TOKEN", process.env.HINOVA_TOKEN || "", cfg.token);
+if (cfg.modoAuth === "usuario") {
+  conferir("HINOVA_USUARIO", process.env.HINOVA_USUARIO || "", cfg.usuario);
+  const senha = process.env.HINOVA_SENHA || "";
+  console.log(`  HINOVA_SENHA: ${senha ? `${senha.length} caracteres` : "VAZIA"}${/[#$"'\\ ]/.test(senha) ? " | ATENÇÃO: tem # $ aspas barra ou espaço; confira se o Easypanel gravou igual" : ""}`);
+}
+console.log(`  Modo de autenticação: ${cfg.modoAuth}${cfg.modoAuth === "token" ? " (só o token; a documentação oficial pede também usuário/senha: HINOVA_AUTH=usuario)" : ""}`);
+
 // 1. Autenticação
 if (cfg.modoAuth === "token") {
   etapa(1, "Autenticação: token da associação direto no cabeçalho (HINOVA_AUTH=token)");
