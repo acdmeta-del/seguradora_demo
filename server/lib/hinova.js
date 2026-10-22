@@ -1,10 +1,11 @@
 /*
  * Cliente do SGA Hinova (API v2).
  *
- * Autenticação no padrão do SGA: o token da associação (HINOVA_TOKEN) vai no
- * cabeçalho Authorization para gerar um token de usuário com HINOVA_USUARIO e
- * HINOVA_SENHA. Esse token fica em cache na memória e é renovado ao expirar ou
- * ao receber 401.
+ * Autenticação (HINOVA_AUTH):
+ *   token   → o token da associação (HINOVA_TOKEN, gerado em Área do cliente > APIs >
+ *             Gerenciar APIs) vai direto em "Authorization: Bearer ...". Padrão sem usuário/senha.
+ *   usuario → o token da associação + HINOVA_USUARIO/HINOVA_SENHA geram um token_usuario
+ *             em /usuario/autenticar, guardado em cache e renovado ao expirar ou receber 401.
  *
  * Os caminhos e nomes de campos vêm da configuração (config.js) porque precisam
  * ser conferidos na documentação do SGA do cliente. Use "npm run testar-hinova".
@@ -88,6 +89,7 @@ export function criarHinova(cfg, { fetchImpl = fetch, agora = Date.now } = {}) {
   }
 
   async function autenticar(forcar = false) {
+    if (cfg.modoAuth === "token") return cfg.token;
     if (!forcar && tokenUsuario && agora() < tokenValidoAte) return tokenUsuario;
     const { status, dados } = await chamar("POST", cfg.pathAutenticar, {
       auth: cfg.token,
@@ -108,12 +110,23 @@ export function criarHinova(cfg, { fetchImpl = fetch, agora = Date.now } = {}) {
   async function get(caminho) {
     let auth = await autenticar();
     let resp = await chamar("GET", caminho, { auth });
-    if (resp.status === 401) {
+    if (resp.status === 401 && cfg.modoAuth === "usuario") {
       auth = await autenticar(true);
       resp = await chamar("GET", caminho, { auth });
     }
-    if (resp.status === 404) return { status: 404, dados: null };
-    if (resp.status >= 400) throw new Error(`Hinova: erro HTTP ${resp.status} em ${caminho.split("/").slice(0, 3).join("/")}`);
+    // A Hinova responde 404 ou 406 quando não encontra o registro
+    if (resp.status === 404 || resp.status === 406) return { status: resp.status, dados: null };
+    if (resp.status >= 400) {
+      const erro = new Error(`Hinova: erro HTTP ${resp.status} em ${caminho.split("/").slice(0, 3).join("/")}`);
+      erro.diagnostico = diagnosticar(resp.status, resp.dados);
+      throw erro;
+    }
+    // Erro com HTTP 200 ({ error: ... }), como na autenticação
+    if (resp.dados && typeof resp.dados === "object" && !Array.isArray(resp.dados) && resp.dados.error) {
+      const erro = new Error(`Hinova: a API recusou a consulta em ${caminho.split("/").slice(0, 3).join("/")}`);
+      erro.diagnostico = diagnosticar(resp.status, resp.dados);
+      throw erro;
+    }
     return resp;
   }
 

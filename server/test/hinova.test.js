@@ -16,7 +16,7 @@ function apiFalsa({ expirarPrimeira = false } = {}) {
     chamadas.push({ caminho, metodo: opt.method, auth: opt.headers.Authorization, body: opt.body });
     if (caminho === "/usuario/autenticar") { autenticacoes++; return responder(200, { token_usuario: `usuario-${autenticacoes}` }); }
     if (expirarPrimeira && autenticacoes === 1 && caminho.startsWith("/veiculo")) return responder(401, {});
-    if (caminho === "/veiculo/buscar/ABC1D23/placa") {
+    if (caminho === "/veiculo/buscar/ABC1D23") {
       return responder(200, [{ placa: "ABC-1D23", codigo_veiculo: 77, cpf: "529.982.247-25", telefone_celular: "(11) 98765-4321" }]);
     }
     if (caminho === "/listar/boleto-associado-veiculo/77") {
@@ -141,4 +141,40 @@ test("diagnóstico lê mensagens dentro de error como objeto ou lista", async ()
   const { diagnosticar } = await import("../lib/hinova.js");
   const d = diagnosticar(200, { error: { mensagem: "Token inválido", codigo: 401, lista: ["Usuário bloqueado"] } });
   assert.deepEqual(d.mensagens, ["error.mensagem: Token inválido", "error.codigo: 401", "error.lista[0]: Usuário bloqueado"]);
+});
+
+test("modo token (padrão sem usuário/senha): usa o token da associação direto, sem /usuario/autenticar", async () => {
+  const cfgToken = lerConfig({ HINOVA_TOKEN: "token-associacao" }).hinova;
+  assert.equal(cfgToken.modoAuth, "token");
+  const chamadas = [];
+  const fetchImpl = async (url, opt) => {
+    chamadas.push({ url, auth: opt.headers.Authorization });
+    if (url.endsWith("/veiculo/buscar/ABC1D23")) return { status: 200, text: async () => JSON.stringify({ placa: "ABC1D23", codigo_veiculo: 1, cpf: "52998224725", telefone_celular: "11987654321" }) };
+    return { status: 200, text: async () => JSON.stringify([{ data_vencimento: "10/10/2026", situacao_boleto: "ABERTO", linha_digitavel: "1" }]) };
+  };
+  const r = await criarHinova(cfgToken, { fetchImpl }).consultar({ placa: "ABC1D23", cpf: "52998224725" });
+  assert.equal(r.resultado, "ok");
+  assert.ok(chamadas.every((c) => c.auth === "Bearer token-associacao"));
+  assert.ok(!chamadas.some((c) => c.url.includes("/usuario/autenticar")));
+});
+
+test("406 da Hinova = veículo não encontrado", async () => {
+  const fetchImpl = async () => ({ status: 406, text: async () => JSON.stringify({ mensagem: "Veículo não encontrado" }) });
+  const h = criarHinova(lerConfig({ HINOVA_TOKEN: "t" }).hinova, { fetchImpl });
+  assert.equal((await h.consultar({ placa: "ABC1D23", cpf: "52998224725" })).resultado, "veiculo_nao_encontrado");
+});
+
+test("rota recusada com HTTP 200 e { error }: falha com diagnóstico", async () => {
+  const fetchImpl = async () => ({ status: 200, text: async () => JSON.stringify({ error: { mensagem: "Rota não liberada para este token" } }) });
+  const h = criarHinova(lerConfig({ HINOVA_TOKEN: "t" }).hinova, { fetchImpl });
+  await assert.rejects(h.consultar({ placa: "ABC1D23", cpf: "52998224725" }), (e) => {
+    assert.deepEqual(e.diagnostico.mensagens, ["error.mensagem: Rota não liberada para este token"]);
+    return true;
+  });
+});
+
+test("config: modo token não exige usuário e senha", async () => {
+  const { conferirConfig } = await import("../lib/config.js");
+  assert.deepEqual(conferirConfig(lerConfig({ TURNSTILE_SECRET: "s", ALLOWED_ORIGINS: "https://a", MODO: "producao", HINOVA_TOKEN: "t" })), []);
+  assert.deepEqual(conferirConfig(lerConfig({ TURNSTILE_SECRET: "s", ALLOWED_ORIGINS: "https://a", MODO: "producao", HINOVA_TOKEN: "t", HINOVA_AUTH: "usuario" })), ["HINOVA_USUARIO", "HINOVA_SENHA"]);
 });

@@ -34,10 +34,14 @@ export function lerConfig(env = process.env) {
       token: env.HINOVA_TOKEN || "",
       usuario: env.HINOVA_USUARIO || "",
       senha: env.HINOVA_SENHA || "",
+      // token   → o token da associação vai direto no Authorization (como no n8n)
+      // usuario → troca token + usuário/senha por um token_usuario (/usuario/autenticar)
+      // Padrão: "usuario" se HINOVA_USUARIO e HINOVA_SENHA estiverem preenchidos; senão "token"
+      modoAuth: env.HINOVA_AUTH || (env.HINOVA_USUARIO && env.HINOVA_SENHA ? "usuario" : "token"),
       // CONFIRMAR na documentação/coleção Postman do SGA v2 do cliente.
       // Marcadores aceitos: {placa} {cpf} {codigo_veiculo} {codigo_associado}
       pathAutenticar: env.HINOVA_PATH_AUTENTICAR || "/usuario/autenticar",
-      pathVeiculo: env.HINOVA_PATH_VEICULO || "/veiculo/buscar/{placa}/placa",
+      pathVeiculo: env.HINOVA_PATH_VEICULO || "/veiculo/buscar/{placa}",
       pathBoletos: env.HINOVA_PATH_BOLETOS || "/listar/boleto-associado-veiculo/{codigo_veiculo}",
       // Opcional: busca o associado quando o veículo não traz CPF/telefone do titular
       pathAssociado: env.HINOVA_PATH_ASSOCIADO || "",
@@ -81,8 +85,9 @@ export function conferirConfig(cfg) {
   if (!["simulado", "homologacao", "producao"].includes(cfg.modo)) faltando.push("MODO (simulado|homologacao|producao)");
   if (cfg.modo !== "simulado") {
     if (!cfg.hinova.token) faltando.push("HINOVA_TOKEN");
-    if (!cfg.hinova.usuario) faltando.push("HINOVA_USUARIO");
-    if (!cfg.hinova.senha) faltando.push("HINOVA_SENHA");
+    if (!["token", "usuario"].includes(cfg.hinova.modoAuth)) faltando.push("HINOVA_AUTH (token|usuario)");
+    if (cfg.hinova.modoAuth === "usuario" && !cfg.hinova.usuario) faltando.push("HINOVA_USUARIO");
+    if (cfg.hinova.modoAuth === "usuario" && !cfg.hinova.senha) faltando.push("HINOVA_SENHA");
   }
   if (cfg.modo === "homologacao" && !cfg.whatsapp.permitidosTeste.length) faltando.push("WHATSAPP_TESTE_PERMITIDOS");
   const w = cfg.whatsapp;

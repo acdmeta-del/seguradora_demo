@@ -58,6 +58,7 @@ Enquanto `boleto.endpoint` estiver vazio em `content/content.js`, o pop-up funci
 
 1. **Novo App** a partir deste repositório GitHub. Build: `Dockerfile`, caminho `server/`.
 2. **Environment**: copie as variáveis de `server/.env.example` e preencha (Hinova, Turnstile, Z-API). Comece com `MODO=homologacao` e seu número em `WHATSAPP_TESTE_PERMITIDOS`.
+   - **Hinova**: `HINOVA_TOKEN` é o token da associação, criado no SGA em Área do cliente → APIs → Gerenciar APIs (libere as rotas de veículo, associado e boleto). Com `HINOVA_AUTH=token` (padrão), só ele é usado, como no n8n. Usuário e senha só são necessários com `HINOVA_AUTH=usuario`.
    - **Z-API** (`WHATSAPP_PROVIDER=zapi`): `ZAPI_INSTANCE` (ID da instância), `ZAPI_TOKEN` (token da instância) e `ZAPI_CLIENT_TOKEN` (token de segurança da conta, no menu Segurança do painel). Sem os três, o servidor não sobe em produção.
 3. **Domains**: use o subdomínio gratuito `*.easypanel.host` (HTTPS automático) apontando para a porta `3000`.
 4. **Teste a Hinova** no console do App: `npm run testar-hinova -- ABC1D23 52998224725`. Ele mostra os nomes dos campos das respostas (sem dados pessoais) para ajustar `HINOVA_PATH_*` e `HINOVA_CAMPO_*`, se preciso.

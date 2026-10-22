@@ -34,14 +34,18 @@ function estrutura(obj, prefixo = "", nivel = 0) {
 const etapa = (n, t) => console.log(`\n[${n}] ${t}`);
 
 try {
-  etapa(1, `Autenticando em ${cfg.baseUrl}${cfg.pathAutenticar}`);
-  await h.autenticar();
-  console.log("  OK: token de usuário obtido");
+  if (cfg.modoAuth === "token") {
+    etapa(1, "Autenticação: token da associação direto no cabeçalho (HINOVA_AUTH=token, sem usuário/senha)");
+  } else {
+    etapa(1, `Autenticando com usuário/senha em ${cfg.baseUrl}${cfg.pathAutenticar}`);
+    await h.autenticar();
+    console.log("  OK: token de usuário obtido");
+  }
 
   const caminhoVeiculo = h._preencher(cfg.pathVeiculo, { placa });
   etapa(2, `Buscando veículo: ${cfg.pathVeiculo}`);
   const rv = await h._get(caminhoVeiculo);
-  if (rv.status === 404 || !rv.dados) { console.log("  Veículo não encontrado (404). Confira HINOVA_PATH_VEICULO e a placa."); process.exit(2); }
+  if (!rv.dados) { console.log(`  Veículo não encontrado (HTTP ${rv.status}). Confira HINOVA_PATH_VEICULO e a placa.`); process.exit(2); }
   const veiculo = comoLista(rv.dados)[0];
   console.log("  Campos da resposta do veículo:");
   console.log(estrutura(veiculo).join("\n"));
@@ -70,6 +74,6 @@ try {
     if (d.mensagens.length) console.error(`  Mensagem da Hinova:\n    ${d.mensagens.join("\n    ")}`);
     console.error("  Se o token veio num campo com outro nome, informe-o em HINOVA_CAMPO_TOKEN_USUARIO.");
   }
-  console.error("Confira HINOVA_TOKEN, HINOVA_USUARIO, HINOVA_SENHA, os caminhos HINOVA_PATH_* e se o IP da VPS está liberado na Hinova.");
+  console.error("Confira HINOVA_TOKEN (e HINOVA_USUARIO/HINOVA_SENHA se HINOVA_AUTH=usuario), as rotas liberadas no token em Gerenciar APIs, os caminhos HINOVA_PATH_* e se o IP da VPS está liberado.");
   process.exit(1);
 }
