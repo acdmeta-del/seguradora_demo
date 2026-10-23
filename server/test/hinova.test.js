@@ -415,3 +415,27 @@ test("escolha do boleto: sem situação ou pago não é enviado; sem linha/PIX p
   assert.equal(r.boleto.vencimento, "05/11/2026");
   assert.equal(r.boleto.pix, PIX);
 });
+
+test("resposta real do servidor (situacao_boleto, cpf, celular): escolhe o boleto aberto de novembro", async () => {
+  const comum = { codigo_associado: 12195, nome_associado: "ASSOCIADO TESTE", cpf: "529.982.247-25", telefone_fixo: "", celular: "(87) 999999999",
+    telefone_comercial: "", codigo_situacao_boleto: "", veiculos: [{ placa: "PGN3D63" }] };
+  const boletos = [
+    { ...comum, nosso_numero: 380000, data_vencimento: "2026-10-05", data_pagamento: "2026-10-04", situacao_boleto: "BAIXADO", linha_digitavel: LINHA3, link_boleto: "https://short.hinova.com.br/v2/a.pdf", pix: { qrcode: null, copia_cola: null } },
+    { ...comum, nosso_numero: 380978, data_vencimento: "2026-11-05", data_pagamento: "", situacao_boleto: "ABERTO", linha_digitavel: LINHA, link_boleto: "https://short.hinova.com.br/v2/b.pdf", pix: { qrcode: "iVBOR", copia_cola: PIX } }
+  ];
+  const fetchImpl = async (url) => (url.endsWith("/listar/boleto-associado-veiculo")
+    ? { status: 200, text: async () => JSON.stringify(boletos) }
+    : { status: 404, text: async () => "{}" });
+  const r = await criarHinova(lerConfig({ HINOVA_TOKEN: "t" }).hinova, { fetchImpl }).consultar({ placa: "PGN3D63", cpf: "52998224725" });
+  assert.equal(r.resultado, "ok");
+  assert.equal(r.telefone, "5587999999999");
+  assert.equal(r.boleto.vencimento, "05/11/2026");
+  assert.equal(r.boleto.pix, PIX);
+  assert.deepEqual(r.boleto.alertas, []);
+});
+
+test("telefone do veículo em campos separados (ddd_celular + telefone_celular)", async () => {
+  const h = criarHinova(lerConfig({ HINOVA_TOKEN: "t" }).hinova, { fetchImpl: async () => ({ status: 404, text: async () => "{}" }) });
+  assert.equal(h.titularDe({ cpf: "52998224725", ddd_celular: "87", telefone_celular: "999999999" }).telefone, "5587999999999");
+  assert.equal(h.titularDe({ cpf: "52998224725", ddd_celular: null, telefone_celular: "999999999" }).telefone, "", "sem DDD não dá para enviar");
+});

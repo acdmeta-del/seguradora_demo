@@ -106,8 +106,8 @@ try {
       const tem = (campos) => (campos.some((c) => c.split(".").reduce((o, k) => (o == null ? undefined : o[k]), b) != null) ? "sim" : "não");
       console.log(`    ${pegar(b, cfg.campos.vencimento) ?? "?"} | ${pegar(b, cfg.campos.situacao) ?? "(sem situação)"} | ${pegar(b, cfg.campos.dataPagamento) ? "pago" : "não pago"} | linha ${tem(cfg.campos.linhaDigitavel)} | PIX ${tem(cfg.campos.pix)} | ${h.estaAberto(b) ? "ABERTO" : "não"}`);
     }
-    const pixCampo = cfg.campos.pix.find((c) => c.split(".").reduce((o, k) => (o == null ? undefined : o[k]), lista[0]) != null);
-    console.log(`  PIX (${cfg.campos.pix.join(" | ")}): ${pixCampo ? "campo presente" : "campo NÃO encontrado"}`);
+    const comPix = lista.filter((b) => pegar(b, cfg.campos.pix) != null).length;
+    console.log(`  PIX (${cfg.campos.pix.join(" | ")}): preenchido em ${comPix} de ${lista.length} boleto(s) (boleto pago costuma vir sem PIX)`);
   }
 } catch (e) { falhou(e); }
 

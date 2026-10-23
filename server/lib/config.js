@@ -61,12 +61,14 @@ export function lerConfig(env = process.env) {
       // Opcional: busca o associado quando o veículo não traz CPF/telefone do titular
       pathAssociado: env.HINOVA_PATH_ASSOCIADO || "",
       // Nomes EXATOS dos campos nas respostas (lista separada por vírgula, aceita "a.b").
-      // Padrões conferidos com a resposta real de /listar/boleto-associado-veiculo.
+      // Padrões conferidos com respostas reais da Hinova (a lista de boletos pode vir com
+      // "descricao_situacao_boleto"/"cpf_associado" ou "situacao_boleto"/"cpf"/"celular").
       // Só estes campos são lidos: não há busca por nomes parecidos no fluxo.
       campos: {
         tokenUsuario: lista(env.HINOVA_CAMPO_TOKEN_USUARIO || "token_usuario,token,access_token,dados.token_usuario,data.token_usuario"),
         cpf: lista(env.HINOVA_CAMPO_CPF || "cpf_associado,cpf"),
-        telefone: lista(env.HINOVA_CAMPO_TELEFONE || "telefone_celular,celular,associado.telefone_celular,associado.celular"),
+        // "a+b" junta campos separados (ex.: DDD + número, como no /veiculo/buscar)
+        telefone: lista(env.HINOVA_CAMPO_TELEFONE || "celular,ddd_celular+telefone_celular,telefone_celular"),
         placa: lista(env.HINOVA_CAMPO_PLACA || "placa"),
         codigoVeiculo: lista(env.HINOVA_CAMPO_CODIGO_VEICULO || "codigo_veiculo"),
         codigoAssociado: lista(env.HINOVA_CAMPO_CODIGO_ASSOCIADO || "codigo_associado,associado.codigo_associado"),
@@ -74,13 +76,13 @@ export function lerConfig(env = process.env) {
         linhaDigitavel: lista(env.HINOVA_CAMPO_LINHA || "linha_digitavel"),
         link: lista(env.HINOVA_CAMPO_LINK || "link_boleto,url_boleto,link"),
         pix: lista(env.HINOVA_CAMPO_PIX || "pix.copia_cola"),            // texto; "pix.qrcode" é a imagem
-        situacao: lista(env.HINOVA_CAMPO_SITUACAO || "descricao_situacao_boleto"),
+        situacao: lista(env.HINOVA_CAMPO_SITUACAO || "descricao_situacao_boleto,situacao_boleto"),
         dataPagamento: lista(env.HINOVA_CAMPO_DATA_PAGAMENTO || "data_pagamento"),   // preenchido = pago
         codigoBoleto: lista(env.HINOVA_CAMPO_CODIGO_BOLETO || "nosso_numero,codigo_boleto,numero_boleto")
       },
       // Situações que NÃO são boleto em aberto (comparação sem acento, maiúsculas)
       // Boleto só conta como aberto se a situação estiver NESTA lista (sem situação = não envia)
-      situacoesAbertas: lista(env.HINOVA_SITUACOES_ABERTAS || "ABERTO"),
+      situacoesAbertas: lista(env.HINOVA_SITUACOES_ABERTAS || "ABERTO,EM ABERTO"),
       timeoutMs: num(env.HINOVA_TIMEOUT_MS, 8000)
     },
 

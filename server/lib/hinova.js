@@ -21,8 +21,15 @@ import { extrairTelefone } from "./whatsapp.js";
 import { formatarData, linhaDigitavel, linkSeguro, pixDoCampo } from "./formatar.js";
 // Lê o primeiro campo existente de uma lista ("a", "a.b")
 export function pegar(obj, caminhos) {
+  const ler = (c) => c.split(".").reduce((o, k) => (o == null ? undefined : o[k]), obj);
   for (const c of caminhos) {
-    const v = c.split(".").reduce((o, k) => (o == null ? undefined : o[k]), obj);
+    // "ddd_celular+telefone_celular": junta as partes, só se todas vierem como texto/número
+    const v = c.includes("+")
+      ? (() => {
+          const partes = c.split("+").map((p) => ler(p.trim()));
+          return partes.every((p) => typeof p === "string" ? p.trim() : typeof p === "number") ? partes.join("") : undefined;
+        })()
+      : ler(c);
     if (v !== undefined && v !== null && v !== "") return v;
   }
   return undefined;
