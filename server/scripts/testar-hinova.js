@@ -99,7 +99,13 @@ try {
     console.log("  Campos do 1º boleto:"); console.log(estrutura(lista[0]).join("\n"));
     titular(lista[0]);
     console.log(`  Número do boleto (${cfg.campos.codigoBoleto.join(" | ")}): ${pegar(lista[0], cfg.campos.codigoBoleto) != null ? "presente" : "NÃO ENCONTRADO"}`);
-    console.log(`  Situações encontradas: ${[...new Set(lista.map((b) => pegar(b, cfg.campos.situacao)).filter(Boolean))].join(", ") || "NÃO ENCONTRADO"}`);
+    console.log(`  Situação (${cfg.campos.situacao.join(" | ")}) encontrada: ${[...new Set(lista.map((b) => pegar(b, cfg.campos.situacao)).filter(Boolean))].join(", ") || "NÃO ENCONTRADO"} | conta como aberto: ${cfg.situacoesAbertas.join(", ")}`);
+    // Resumo de cada boleto (sem dados pessoais): ajuda a ver qual seria escolhido
+    console.log("  Boletos (vencimento | situação | pago? | linha | PIX | aberto?):");
+    for (const b of lista.slice(0, 12)) {
+      const tem = (campos) => (campos.some((c) => c.split(".").reduce((o, k) => (o == null ? undefined : o[k]), b) != null) ? "sim" : "não");
+      console.log(`    ${pegar(b, cfg.campos.vencimento) ?? "?"} | ${pegar(b, cfg.campos.situacao) ?? "(sem situação)"} | ${pegar(b, cfg.campos.dataPagamento) ? "pago" : "não pago"} | linha ${tem(cfg.campos.linhaDigitavel)} | PIX ${tem(cfg.campos.pix)} | ${h.estaAberto(b) ? "ABERTO" : "não"}`);
+    }
     const pixCampo = cfg.campos.pix.find((c) => c.split(".").reduce((o, k) => (o == null ? undefined : o[k]), lista[0]) != null);
     console.log(`  PIX (${cfg.campos.pix.join(" | ")}): ${pixCampo ? "campo presente" : "campo NÃO encontrado"}`);
   }

@@ -75,10 +75,12 @@ export function lerConfig(env = process.env) {
         link: lista(env.HINOVA_CAMPO_LINK || "link_boleto,url_boleto,link"),
         pix: lista(env.HINOVA_CAMPO_PIX || "pix.copia_cola"),            // texto; "pix.qrcode" é a imagem
         situacao: lista(env.HINOVA_CAMPO_SITUACAO || "descricao_situacao_boleto"),
+        dataPagamento: lista(env.HINOVA_CAMPO_DATA_PAGAMENTO || "data_pagamento"),   // preenchido = pago
         codigoBoleto: lista(env.HINOVA_CAMPO_CODIGO_BOLETO || "nosso_numero,codigo_boleto,numero_boleto")
       },
       // Situações que NÃO são boleto em aberto (comparação sem acento, maiúsculas)
-      situacoesFechadas: lista(env.HINOVA_SITUACOES_FECHADAS || "BAIXADO,PAGO,CANCELADO,LIQUIDADO"),
+      // Boleto só conta como aberto se a situação estiver NESTA lista (sem situação = não envia)
+      situacoesAbertas: lista(env.HINOVA_SITUACOES_ABERTAS || "ABERTO"),
       timeoutMs: num(env.HINOVA_TIMEOUT_MS, 8000)
     },
 

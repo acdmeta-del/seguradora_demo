@@ -393,3 +393,25 @@ test("resposta real de /listar/boleto-associado-veiculo (anonimizada): PIX, data
   assert.match(texto, /Vencimento: 05\/11\/2026/);
   assert.match(texto, /PIX copia e cola: 00020101021226770014BR\.GOV\.BCB\.PIX/);
 });
+
+test("escolha do boleto: sem situação ou pago não é enviado; sem linha/PIX passa para o próximo", async () => {
+  const base = { cpf_associado: "52998224725", telefone_celular: "(87) 999999999" };
+  const rodar = async (boletos) => {
+    const fetchImpl = async (url) => (url.endsWith("/listar/boleto-associado-veiculo")
+      ? { status: 200, text: async () => JSON.stringify(boletos) }
+      : { status: 404, text: async () => "{}" });
+    return criarHinova(lerConfig({ HINOVA_TOKEN: "t" }).hinova, { fetchImpl }).consultar({ placa: "PGN3D63", cpf: "52998224725" });
+  };
+  // Sem situação: na dúvida, não envia
+  assert.equal((await rodar([{ ...base, data_vencimento: "2026-10-05", linha_digitavel: LINHA }])).resultado, "sem_boleto_aberto");
+  // Pago (data_pagamento preenchida), mesmo com situação "ABERTO"
+  assert.equal((await rodar([{ ...base, descricao_situacao_boleto: "ABERTO", data_pagamento: "2026-10-04", data_vencimento: "2026-10-05", linha_digitavel: LINHA }])).resultado, "sem_boleto_aberto");
+  // Outubro está "aberto" mas sem linha nem PIX: usa novembro
+  const r = await rodar([
+    { ...base, descricao_situacao_boleto: "ABERTO", data_pagamento: null, data_vencimento: "2026-10-05" },
+    { ...base, descricao_situacao_boleto: "ABERTO", data_pagamento: null, data_vencimento: "2026-11-05", linha_digitavel: LINHA, pix: { copia_cola: PIX } }
+  ]);
+  assert.equal(r.resultado, "ok");
+  assert.equal(r.boleto.vencimento, "05/11/2026");
+  assert.equal(r.boleto.pix, PIX);
+});

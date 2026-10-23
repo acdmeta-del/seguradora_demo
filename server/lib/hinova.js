@@ -60,6 +60,7 @@ export function procurarCampo(obj, padroes, aceitar) {
   return null;
 }
 
+const comoTextoSimples = (v) => (typeof v === "string" || typeof v === "number" ? String(v).trim() : "");
 const semAcento = (s) => String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toUpperCase();
 
 // "dd/mm/aaaa" ou "aaaa-mm-dd" → número comparável
@@ -182,37 +183,46 @@ export function criarHinova(cfg, { fetchImpl = fetch, agora = Date.now } = {}) {
     return comoLista(dados);
   }
 
-  async function buscarBoletoAberto(valores, listaPronta) {
-    const fechadas = cfg.situacoesFechadas.map(semAcento);
-    const abertos = (listaPronta || (await listarBoletos(valores))).filter((b) => {
-      const sit = semAcento(pegar(b, cfg.campos.situacao));
-      return !fechadas.some((f) => sit.includes(f));
-    });
-    // O boleto em aberto com vencimento mais antigo é a 2ª via mais urgente
-    abertos.sort((a, b) => dataNum(pegar(a, cfg.campos.vencimento)) - dataNum(pegar(b, cfg.campos.vencimento)));
-    let b = abertos[0];
-    if (!b) return null;
+  // Boleto aberto = situação na lista de abertas E sem data de pagamento.
+  // Sem situação conhecida, NÃO conta como aberto (na dúvida, não envia).
+  function estaAberto(b) {
+    const sit = semAcento(comoTextoSimples(pegar(b, cfg.campos.situacao)));
+    const pago = comoTextoSimples(pegar(b, cfg.campos.dataPagamento));
+    return Boolean(sit) && cfg.situacoesAbertas.map(semAcento).includes(sit) && !pago;
+  }
 
-    // Detalhe do boleto (GET /buscar/boleto/{número}) quando a lista não traz linha digitável/link/PIX
-    const codigo = pegar(b, cfg.campos.codigoBoleto);
-    const incompleto = !linhaDigitavel(pegar(b, cfg.campos.linhaDigitavel)) || !pixDoCampo(b, cfg.campos.pix).pix;
-    if (incompleto && codigo && cfg.pathBoletoDetalhe) {
-      const { dados } = await get(preencher(cfg.pathBoletoDetalhe, { ...valores, codigo_boleto: codigo }));
-      const detalhe = comoLista(dados)[0];
-      if (detalhe && typeof detalhe === "object") b = { ...b, ...detalhe };
+  async function buscarBoletoAberto(valores, listaPronta) {
+    const abertos = (listaPronta || (await listarBoletos(valores))).filter(estaAberto);
+    // Vencimento mais antigo primeiro: é a 2ª via mais urgente
+    abertos.sort((a, b) => dataNum(pegar(a, cfg.campos.vencimento)) - dataNum(pegar(b, cfg.campos.vencimento)));
+
+    // Tenta até 3 boletos: só serve um que tenha linha digitável ou PIX
+    for (const candidato of abertos.slice(0, 3)) {
+      let b = candidato;
+      // Detalhe (GET /buscar/boleto/{nosso_numero}) quando a lista não traz linha digitável ou PIX
+      const codigo = pegar(b, cfg.campos.codigoBoleto);
+      const incompleto = !linhaDigitavel(pegar(b, cfg.campos.linhaDigitavel)) || !pixDoCampo(b, cfg.campos.pix).pix;
+      if (incompleto && codigo && cfg.pathBoletoDetalhe) {
+        const { dados } = await get(preencher(cfg.pathBoletoDetalhe, { ...valores, codigo_boleto: codigo }));
+        const detalhe = comoLista(dados)[0];
+        if (detalhe && typeof detalhe === "object") b = { ...b, ...detalhe };
+      }
+      // Campos exatos, convertidos e validados (formatar.js): o que não for válido fica de fora
+      const pix = pixDoCampo(b, cfg.campos.pix);
+      const linha = linhaDigitavel(pegar(b, cfg.campos.linhaDigitavel));
+      if (!linha && !pix.pix) continue;
+      const alertas = [];
+      if (pix.presente && !pix.pix) alertas.push(`PIX no campo "${pix.campo}" não é um código válido; enviado sem PIX`);
+      if (!pix.presente) alertas.push(`campo de PIX (${cfg.campos.pix.join(" | ")}) não veio na resposta; enviado sem PIX`);
+      return {
+        vencimento: formatarData(pegar(b, cfg.campos.vencimento)),
+        linhaDigitavel: linha,
+        link: linkSeguro(pegar(b, cfg.campos.link)),
+        pix: pix.pix,
+        alertas
+      };
     }
-    // Campos exatos, convertidos e validados (formatar.js): o que não for válido fica de fora
-    const pix = pixDoCampo(b, cfg.campos.pix);
-    const alertas = [];
-    if (pix.presente && !pix.pix) alertas.push(`PIX no campo "${pix.campo}" não é um código válido; enviado sem PIX`);
-    if (!pix.presente) alertas.push(`campo de PIX (${cfg.campos.pix.join(" | ")}) não veio na resposta; enviado sem PIX`);
-    return {
-      vencimento: formatarData(pegar(b, cfg.campos.vencimento)),
-      linhaDigitavel: linhaDigitavel(pegar(b, cfg.campos.linhaDigitavel)),
-      link: linkSeguro(pegar(b, cfg.campos.link)),
-      pix: pix.pix,
-      alertas
-    };
+    return null;
   }
 
   const digitos = (v) => String(v || "").replace(/\D/g, "");
@@ -274,5 +284,5 @@ export function criarHinova(cfg, { fetchImpl = fetch, agora = Date.now } = {}) {
     return { resultado: "ok", telefone, boleto };
   }
 
-  return { autenticar, buscarVeiculo, listarBoletos, buscarBoletoAberto, consultar, titularDe, _chamar: chamar, _get: get, _preencher: preencher };
+  return { autenticar, buscarVeiculo, listarBoletos, buscarBoletoAberto, consultar, titularDe, estaAberto, _chamar: chamar, _get: get, _preencher: preencher };
 }
