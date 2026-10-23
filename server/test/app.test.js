@@ -41,8 +41,12 @@ async function subir(env = {}, { humano = true } = {}) {
     const texto = await r.text();
     return { status: r.status, texto, json: (() => { try { return JSON.parse(texto); } catch { return null; } })(), headers: r.headers, ms: Date.now() - t0 };
   };
+  const preflight = (origem) => fetch(url, {
+    method: "OPTIONS",
+    headers: { Origin: origem, "Access-Control-Request-Method": "POST", "Access-Control-Request-Headers": "content-type" }
+  });
   const fim = () => new Promise((r) => server.close(r));
-  return { post, chamadas, app, fim };
+  return { post, preflight, chamadas, app, fim };
 }
 
 const valido = { placa: "ABC-1D23", cpf: "529.982.247-25", token: "tok" };
@@ -155,4 +159,21 @@ test("cabeçalhos de segurança do helmet presentes", async (t) => {
   assert.ok(r.headers.get("content-security-policy"));
   assert.equal(r.headers.get("x-content-type-options"), "nosniff");
   assert.equal(r.headers.get("x-powered-by"), null);
+});
+
+test("ALLOWED_ORIGINS com barra final, caminho ou espaço ainda libera a origem", async (t) => {
+  const s = await subir({ ALLOWED_ORIGINS: " https://acdmeta-del.github.io/seguradora_demo/ " }); t.after(s.fim);
+  const r = await s.post(valido);
+  assert.equal(r.status, 200);
+  assert.equal(r.headers.get("access-control-allow-origin"), ORIGEM);
+});
+
+test("preflight (OPTIONS) da origem permitida devolve os cabeçalhos CORS", async (t) => {
+  const s = await subir(); t.after(s.fim);
+  const r = await s.preflight(ORIGEM);
+  assert.equal(r.status, 204);
+  assert.equal(r.headers.get("access-control-allow-origin"), ORIGEM);
+  assert.match(r.headers.get("access-control-allow-methods"), /POST/);
+  const outra = await s.preflight("https://site-malicioso.com");
+  assert.equal(outra.headers.get("access-control-allow-origin"), null);
 });

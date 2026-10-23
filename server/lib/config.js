@@ -4,6 +4,11 @@
  */
 // Credencial colada no painel: remove espaços nas pontas e um "Bearer " colado por engano
 const credencial = (v) => String(v || "").trim().replace(/^Bearer\s+/i, "");
+// Aceita "https://site.com/", "https://site.com/pasta" ou com espaços: fica só a origem
+export const normalizarOrigem = (v) => {
+  const t = String(v || "").trim().toLowerCase();
+  try { return new URL(t).origin; } catch { return t.replace(/\/+$/, ""); }
+};
 const lista = (v) => String(v || "").split(",").map((s) => s.trim()).filter(Boolean);
 const num = (v, padrao) => (Number.isFinite(Number(v)) && v !== "" && v != null ? Number(v) : padrao);
 
@@ -15,7 +20,8 @@ export function lerConfig(env = process.env) {
     modo: env.MODO || "simulado",
     // Quantos proxies confiáveis à frente (Traefik do Easypanel = 1)
     trustProxy: num(env.TRUST_PROXY, 1),
-    origens: lista(env.ALLOWED_ORIGINS),
+    // Origem = esquema + domínio, sem caminho e sem barra final (ex.: https://acdmeta-del.github.io)
+    origens: lista(env.ALLOWED_ORIGINS).map(normalizarOrigem),
 
     turnstile: {
       segredo: env.TURNSTILE_SECRET || "",

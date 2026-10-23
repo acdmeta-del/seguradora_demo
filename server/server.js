@@ -25,5 +25,6 @@ const app = criarApp(cfg, {
 });
 
 app.listen(cfg.porta, () => {
-  console.info(`Intermediário no ar na porta ${cfg.porta} (modo: ${cfg.modo}, WhatsApp: ${cfg.whatsapp.provedor})`);
+  console.info(`Intermediário no ar na porta ${cfg.porta} (modo: ${cfg.modo}, WhatsApp: ${cfg.whatsapp.provedor}, Hinova: ${cfg.hinova.modoAuth})`);
+  console.info(`Origens permitidas: ${cfg.origens.join(", ") || "TODAS (ALLOWED_ORIGINS vazio)"}`);
 });

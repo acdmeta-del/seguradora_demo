@@ -15,6 +15,7 @@ import helmet from "helmet";
 import cors from "cors";
 import rateLimit from "express-rate-limit";
 import { validarPedido, mascararCpf, mascararPlaca } from "./lib/validar.js";
+import { normalizarOrigem } from "./lib/config.js";
 import { verificarTurnstile } from "./lib/turnstile.js";
 import { montarMensagem } from "./lib/whatsapp.js";
 
@@ -46,9 +47,14 @@ export function criarApp(cfg, deps) {
   app.use(helmet());
 
   // CORS: só as origens configuradas (GitHub Pages e, no futuro, o domínio próprio)
-  const origemOk = (origem) => !cfg.origens.length || cfg.origens.includes(origem);
+  const origemOk = (origem) => !cfg.origens.length || (Boolean(origem) && cfg.origens.includes(normalizarOrigem(origem)));
   app.use("/api", cors({
-    origin: (origem, cb) => cb(null, Boolean(origem) && origemOk(origem)),
+    origin: (origem, cb) => {
+      const ok = Boolean(origem) && origemOk(origem);
+      // Ajuda a diagnosticar ALLOWED_ORIGINS (a origem é o endereço do site, não é dado pessoal)
+      if (origem && !ok) log.info(`[cors] origem recusada: ${origem} (permitidas: ${cfg.origens.join(", ")})`);
+      cb(null, ok);
+    },
     methods: ["POST"],
     allowedHeaders: ["Content-Type"],
     maxAge: 600
