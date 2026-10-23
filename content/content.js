@@ -177,8 +177,8 @@ window.SITE_CONTENT = {
     // Vazio = modo demonstração (resposta simulada no navegador, sem consulta real).
     endpoint: "https://integra-demo.enwglb.easypanel.host/api/boleto",
     // PERSONALIZAR: chave de SITE do Cloudflare Turnstile (pública). A chave SECRETA vai só no servidor.
-    // "1x00000000000000000000AA" é a chave de teste da Cloudflare (sempre aprova).
-    turnstileSiteKey: "1x00000000000000000000AA"
+    // Para testes locais, "1x00000000000000000000AA" é a chave de teste da Cloudflare (sempre aprova).
+    turnstileSiteKey: "0x4AAAAAAFhTd0XP4HxrEGCP"
   },
 
   privacidade: {
