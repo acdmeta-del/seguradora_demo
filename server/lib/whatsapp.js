@@ -7,6 +7,7 @@
  *               cabeçalho Client-Token = token de segurança da conta)
  */
 import { mascararTelefone } from "./validar.js";
+import { comoTexto, formatarData, linhaDigitavel, linkSeguro, pixValido } from "./formatar.js";
 
 // Celular brasileiro → formato internacional só com dígitos (55 + DDD + número)
 export function normalizarTelefone(tel) {
@@ -36,12 +37,18 @@ export function mesmoTelefone(a, b) {
   return x === y || semNono(x) === semNono(y);
 }
 
+// Cada linha só entra se o valor passar na validação do seu tipo (formatar.js).
+// Valida de novo aqui para que nenhum chamador consiga colocar um objeto ou lixo na mensagem.
 export function montarMensagem(boleto, nomeEmpresa) {
-  const linhas = [`Olá! Aqui é a ${nomeEmpresa}. Segue a 2ª via do seu boleto:`];
-  if (boleto.vencimento) linhas.push(`Vencimento: ${boleto.vencimento}`);
-  if (boleto.linhaDigitavel) linhas.push(`Linha digitável: ${boleto.linhaDigitavel}`);
-  if (boleto.pix) linhas.push(`PIX copia e cola: ${boleto.pix}`);
-  if (boleto.link) linhas.push(`Boleto: ${boleto.link}`);
+  const vencimento = formatarData(boleto.vencimento);
+  const linha = linhaDigitavel(boleto.linhaDigitavel);
+  const pix = pixValido(boleto.pix);
+  const link = linkSeguro(boleto.link);
+  const linhas = [`Olá! Aqui é a ${comoTexto(nomeEmpresa) || "associação"}. Segue a 2ª via do seu boleto:`];
+  if (vencimento) linhas.push(`Vencimento: ${vencimento}`);
+  if (linha) linhas.push(`Linha digitável: ${linha}`);
+  if (pix) linhas.push(`PIX copia e cola: ${pix}`);
+  if (link) linhas.push(`Boleto: ${link}`);
   linhas.push("Se você não pediu esta mensagem, pode ignorá-la.");
   return linhas.join("\n");
 }

@@ -108,7 +108,7 @@ try {
   console.log(`  Resultado: ${r.resultado}`);
   if (r.boleto) {
     console.log(`  Vencimento: ${r.boleto.vencimento ?? "-"}`);
-    console.log(`  Linha digitável: ${r.boleto.linhaDigitavel ? "presente" : "ausente"} | Link: ${r.boleto.link ? "presente" : "ausente"} | PIX: ${r.boleto.pix ? "presente" : "ausente"}`);
+    console.log(`  Linha digitável: ${r.boleto.linhaDigitavel ? "válida" : "ausente ou inválida"} | Link: ${r.boleto.link ? "válido (https)" : "ausente"} | PIX copia e cola: ${r.boleto.pix ? "válido (CRC confere)" : "não encontrado ou inválido"}`);
   }
 } catch (e) { falhou(e); }
 

@@ -18,6 +18,7 @@
  * caminho (encodeURIComponent), nunca como texto livre.
  */
 import { extrairTelefone } from "./whatsapp.js";
+import { formatarData, linhaDigitavel, linkSeguro, acharPix } from "./formatar.js";
 // Lê o primeiro campo existente de uma lista ("a", "a.b")
 export function pegar(obj, caminhos) {
   for (const c of caminhos) {
@@ -193,17 +194,18 @@ export function criarHinova(cfg, { fetchImpl = fetch, agora = Date.now } = {}) {
 
     // Detalhe do boleto (GET /buscar/boleto/{número}) quando a lista não traz linha digitável/link/PIX
     const codigo = pegar(b, cfg.campos.codigoBoleto);
-    const incompleto = !pegar(b, cfg.campos.linhaDigitavel) || !(pegar(b, cfg.campos.link) || pegar(b, cfg.campos.pix));
+    const incompleto = !linhaDigitavel(pegar(b, cfg.campos.linhaDigitavel)) || !acharPix(b, cfg.campos.pix);
     if (incompleto && codigo && cfg.pathBoletoDetalhe) {
       const { dados } = await get(preencher(cfg.pathBoletoDetalhe, { ...valores, codigo_boleto: codigo }));
       const detalhe = comoLista(dados)[0];
       if (detalhe && typeof detalhe === "object") b = { ...b, ...detalhe };
     }
+    // Tudo convertido e validado (formatar.js): o que não for válido fica de fora da mensagem
     return {
-      vencimento: pegar(b, cfg.campos.vencimento),
-      linhaDigitavel: pegar(b, cfg.campos.linhaDigitavel),
-      link: pegar(b, cfg.campos.link),
-      pix: pegar(b, cfg.campos.pix)
+      vencimento: formatarData(pegar(b, cfg.campos.vencimento)),
+      linhaDigitavel: linhaDigitavel(pegar(b, cfg.campos.linhaDigitavel)),
+      link: linkSeguro(pegar(b, cfg.campos.link)),
+      pix: acharPix(b, cfg.campos.pix)
     };
   }
 
