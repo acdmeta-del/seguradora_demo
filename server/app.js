@@ -95,6 +95,7 @@ export function criarApp(cfg, deps) {
         return "bloqueado_homologacao";
       }
     }
+    for (const a of r.boleto.alertas || []) log.info(`[boleto] alerta: ${a}: ${ref}`);
     await whatsapp.enviar(r.telefone, montarMensagem(r.boleto, cfg.whatsapp.nomeEmpresa));
     log.info(`[boleto] enviado: ${ref}`);
     return "enviado";

@@ -18,7 +18,7 @@
  * caminho (encodeURIComponent), nunca como texto livre.
  */
 import { extrairTelefone } from "./whatsapp.js";
-import { formatarData, linhaDigitavel, linkSeguro, acharPix } from "./formatar.js";
+import { formatarData, linhaDigitavel, linkSeguro, pixDoCampo } from "./formatar.js";
 // Lê o primeiro campo existente de uma lista ("a", "a.b")
 export function pegar(obj, caminhos) {
   for (const c of caminhos) {
@@ -38,8 +38,9 @@ export function comoLista(resposta) {
   return [];
 }
 
-// Procura, em até 3 níveis, o 1º campo cujo nome casa com os padrões (em ordem de prioridade)
-// e cujo valor é aceito por "aceitar". Devolve { valor, campo } ou null.
+// SÓ PARA DIAGNÓSTICO (testar-hinova): sugere nomes de campo para configurar.
+// O fluxo real não usa esta busca; lê apenas os campos exatos de config.js.
+// Procura, em até 3 níveis, o 1º campo cujo nome casa com os padrões e cujo valor é aceito.
 export function procurarCampo(obj, padroes, aceitar) {
   for (const padrao of padroes) {
     const pilha = [[obj, "", 0]];
@@ -194,18 +195,23 @@ export function criarHinova(cfg, { fetchImpl = fetch, agora = Date.now } = {}) {
 
     // Detalhe do boleto (GET /buscar/boleto/{número}) quando a lista não traz linha digitável/link/PIX
     const codigo = pegar(b, cfg.campos.codigoBoleto);
-    const incompleto = !linhaDigitavel(pegar(b, cfg.campos.linhaDigitavel)) || !acharPix(b, cfg.campos.pix);
+    const incompleto = !linhaDigitavel(pegar(b, cfg.campos.linhaDigitavel)) || !pixDoCampo(b, cfg.campos.pix).pix;
     if (incompleto && codigo && cfg.pathBoletoDetalhe) {
       const { dados } = await get(preencher(cfg.pathBoletoDetalhe, { ...valores, codigo_boleto: codigo }));
       const detalhe = comoLista(dados)[0];
       if (detalhe && typeof detalhe === "object") b = { ...b, ...detalhe };
     }
-    // Tudo convertido e validado (formatar.js): o que não for válido fica de fora da mensagem
+    // Campos exatos, convertidos e validados (formatar.js): o que não for válido fica de fora
+    const pix = pixDoCampo(b, cfg.campos.pix);
+    const alertas = [];
+    if (pix.presente && !pix.pix) alertas.push(`PIX no campo "${pix.campo}" não é um código válido; enviado sem PIX`);
+    if (!pix.presente) alertas.push(`campo de PIX (${cfg.campos.pix.join(" | ")}) não veio na resposta; enviado sem PIX`);
     return {
       vencimento: formatarData(pegar(b, cfg.campos.vencimento)),
       linhaDigitavel: linhaDigitavel(pegar(b, cfg.campos.linhaDigitavel)),
       link: linkSeguro(pegar(b, cfg.campos.link)),
-      pix: acharPix(b, cfg.campos.pix)
+      pix: pix.pix,
+      alertas
     };
   }
 
@@ -213,21 +219,13 @@ export function criarHinova(cfg, { fetchImpl = fetch, agora = Date.now } = {}) {
 
   // Fluxo completo: titular confere com o CPF → boleto em aberto → telefone cadastrado.
   // Com HINOVA_PATH_VEICULO vazio, usa só as rotas de boleto (CPF/telefone vêm da lista de boletos).
-  // CPF e telefone do titular num registro: primeiro os campos configurados (HINOVA_CAMPO_*),
-  // depois uma busca por nomes parecidos. Na busca automática, telefone só vale se for celular.
+  // CPF e telefone do titular num registro, lidos SOMENTE dos campos configurados
+  // (HINOVA_CAMPO_CPF, HINOVA_CAMPO_TELEFONE). Sem busca por nomes parecidos: um campo
+  // errado poderia mandar o boleto para o número de outra pessoa.
   function titularDe(obj) {
-    const cpfCfg = digitos(pegar(obj, cfg.campos.cpf));
-    const telCfg = extrairTelefone(pegar(obj, cfg.campos.telefone));
-    const cpfAuto = cpfCfg ? null : procurarCampo(obj, [/cpf/i], (v) => (/^\d{11}$/.test(digitos(v)) ? digitos(v) : null));
-    const telAuto = telCfg ? null : procurarCampo(obj, [/celular|whats/i, /telefone|fone/i], (v) => {
-      const n = extrairTelefone(v);
-      return n && n.length === 13 && n[4] === "9" ? n : null;
-    });
     return {
-      cpf: cpfCfg || cpfAuto?.valor || "",
-      telefone: telCfg || telAuto?.valor || "",
-      campoCpf: cpfCfg ? "config" : cpfAuto?.campo,
-      campoTelefone: telCfg ? "config" : telAuto?.campo
+      cpf: digitos(pegar(obj, cfg.campos.cpf)),
+      telefone: extrairTelefone(pegar(obj, cfg.campos.telefone)) || ""
     };
   }
 

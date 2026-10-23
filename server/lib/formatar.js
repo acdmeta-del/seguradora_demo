@@ -65,26 +65,13 @@ export function pixValido(v) {
   return s;
 }
 
-// Procura o PIX copia e cola: primeiro nos campos configurados, depois em qualquer
-// texto da resposta (até 4 níveis), aceitando só o que passa em pixValido.
-// Imagens de QR Code (base64), links e outros textos são ignorados.
-export function acharPix(obj, camposPreferidos = []) {
-  const visitar = (v, nivel) => {
-    if (nivel > 4 || v == null) return null;
-    const direto = pixValido(v);
-    if (direto) return direto;
-    if (typeof v === "object") {
-      for (const x of Array.isArray(v) ? v : Object.values(v)) {
-        const achado = visitar(x, nivel + 1);
-        if (achado) return achado;
-      }
-    }
-    return null;
-  };
-  for (const c of camposPreferidos) {
+// PIX copia e cola lido SOMENTE do(s) campo(s) configurado(s) (padrão "pix.copia_cola").
+// Devolve { pix, campo, presente }: presente=true e pix=null quando o campo existe mas não é
+// um código válido (aí a mensagem sai sem PIX e o servidor registra um alerta).
+export function pixDoCampo(obj, campos = []) {
+  for (const c of campos) {
     const v = c.split(".").reduce((o, k) => (o == null ? undefined : o[k]), obj);
-    const achado = visitar(v, 0);
-    if (achado) return achado;
+    if (v !== undefined && v !== null && v !== "") return { pix: pixValido(v), campo: c, presente: true };
   }
-  return visitar(obj, 0);
+  return { pix: null, campo: null, presente: false };
 }

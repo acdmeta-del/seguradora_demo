@@ -7,7 +7,7 @@
  * caminhos (HINOVA_PATH_*) e os campos (HINOVA_CAMPO_*). Não envia nada pelo WhatsApp.
  */
 import { lerConfig } from "../lib/config.js";
-import { criarHinova, comoLista, pegar } from "../lib/hinova.js";
+import { criarHinova, comoLista, pegar, procurarCampo } from "../lib/hinova.js";
 import { mesmoTelefone } from "../lib/whatsapp.js";
 import { normalizarPlaca, normalizarCpf, mascararCpf, mascararTelefone } from "../lib/validar.js";
 
@@ -36,10 +36,12 @@ const digitos = (v) => String(v || "").replace(/\D/g, "");
 function titular(obj) {
   const t = h.titularDe(obj);
   const teste = String(process.env.WHATSAPP_TESTE_PERMITIDOS || "").split(",").filter((n) => n.trim());
-  const de = (campo) => (campo === "config" ? "campos configurados" : campo ? `campo "${campo}"` : "");
-  console.log(`  CPF do titular: ${t.cpf ? `${mascararCpf(t.cpf)} (confere: ${t.cpf === cpf ? "sim" : "não"}; ${de(t.campoCpf)})` : "NÃO ENCONTRADO"}`);
-  console.log(`  Telefone: ${t.telefone ? `${mascararTelefone(t.telefone)}, enviado como ${t.telefone.length} dígitos (${de(t.campoTelefone)})` : "NÃO ENCONTRADO"}`);
+  console.log(`  CPF do titular (${cfg.campos.cpf.join(" | ")}): ${t.cpf ? `${mascararCpf(t.cpf)} (confere: ${t.cpf === cpf ? "sim" : "não"})` : "NÃO ENCONTRADO"}`);
+  console.log(`  Telefone (${cfg.campos.telefone.join(" | ")}): ${t.telefone ? `${mascararTelefone(t.telefone)}, enviado como ${t.telefone.length} dígitos` : "NÃO ENCONTRADO"}`);
   if (t.telefone && teste.length) console.log(`  Está em WHATSAPP_TESTE_PERMITIDOS: ${teste.some((n) => mesmoTelefone(n, t.telefone)) ? "sim" : "NÃO (confira o número cadastrado na Hinova)"}`);
+  // Só no diagnóstico: sugere nomes de campo para configurar (o fluxo real NÃO usa esta busca)
+  if (!t.cpf) { const s = procurarCampo(obj, [/cpf/i], (v) => (/^\d{11}$/.test(digitos(v)) ? "x" : null)); if (s) console.log(`    sugestão: HINOVA_CAMPO_CPF=${s.campo}`); }
+  if (!t.telefone) { const s = procurarCampo(obj, [/celular|whats/i, /telefone|fone/i], (v) => (/\d{10,}/.test(digitos(v)) ? "x" : null)); if (s) console.log(`    sugestão: HINOVA_CAMPO_TELEFONE=${s.campo}`); }
 }
 function falhou(e) {
   falhas++;
@@ -98,6 +100,8 @@ try {
     titular(lista[0]);
     console.log(`  Número do boleto (${cfg.campos.codigoBoleto.join(" | ")}): ${pegar(lista[0], cfg.campos.codigoBoleto) != null ? "presente" : "NÃO ENCONTRADO"}`);
     console.log(`  Situações encontradas: ${[...new Set(lista.map((b) => pegar(b, cfg.campos.situacao)).filter(Boolean))].join(", ") || "NÃO ENCONTRADO"}`);
+    const pixCampo = cfg.campos.pix.find((c) => c.split(".").reduce((o, k) => (o == null ? undefined : o[k]), lista[0]) != null);
+    console.log(`  PIX (${cfg.campos.pix.join(" | ")}): ${pixCampo ? "campo presente" : "campo NÃO encontrado"}`);
   }
 } catch (e) { falhou(e); }
 
@@ -108,6 +112,7 @@ try {
   console.log(`  Resultado: ${r.resultado}`);
   if (r.boleto) {
     console.log(`  Vencimento: ${r.boleto.vencimento ?? "-"}`);
+    for (const a of r.boleto.alertas || []) console.log(`  ALERTA: ${a}`);
     console.log(`  Linha digitável: ${r.boleto.linhaDigitavel ? "válida" : "ausente ou inválida"} | Link: ${r.boleto.link ? "válido (https)" : "ausente"} | PIX copia e cola: ${r.boleto.pix ? "válido (CRC confere)" : "não encontrado ou inválido"}`);
   }
 } catch (e) { falhou(e); }

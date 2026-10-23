@@ -28,9 +28,9 @@ function apiFalsa({ expirarPrimeira = false } = {}) {
     }
     if (caminho === "/listar/boleto-associado-veiculo" && opt.method === "POST") {
       return responder(200, { boletos: [
-        { data_vencimento: "10/09/2026", situacao_boleto: "BAIXADO", linha_digitavel: LINHA3 },
-        { data_vencimento: "10/11/2026", situacao_boleto: "ABERTO", linha_digitavel: LINHA2 },
-        { data_vencimento: "10/10/2026", situacao_boleto: "ABERTO", linha_digitavel: LINHA, link_boleto: "https://x/b", pix: { copia_e_cola: PIX, qrcode: "data:image/png;base64,iVBORw0KGgo=" } }
+        { data_vencimento: "10/09/2026", descricao_situacao_boleto: "BAIXADO", linha_digitavel: LINHA3 },
+        { data_vencimento: "10/11/2026", descricao_situacao_boleto: "ABERTO", linha_digitavel: LINHA2 },
+        { data_vencimento: "10/10/2026", descricao_situacao_boleto: "ABERTO", linha_digitavel: LINHA, link_boleto: "https://x/b", pix: { qrcode: "iVBORw0KGgo=", copia_cola: PIX } }
       ] });
     }
     return responder(404, {});
@@ -158,7 +158,7 @@ test("modo token (padrão sem usuário/senha): usa o token da associação diret
   const fetchImpl = async (url, opt) => {
     chamadas.push({ url, auth: opt.headers.Authorization });
     if (url.endsWith("/veiculo/buscar/ABC1D23")) return { status: 200, text: async () => JSON.stringify({ placa: "ABC1D23", codigo_veiculo: 1, cpf: "52998224725", telefone_celular: "11987654321" }) };
-    return { status: 200, text: async () => JSON.stringify([{ data_vencimento: "10/10/2026", situacao_boleto: "ABERTO", linha_digitavel: LINHA, pix: PIX }]) };
+    return { status: 200, text: async () => JSON.stringify([{ data_vencimento: "10/10/2026", descricao_situacao_boleto: "ABERTO", linha_digitavel: LINHA, pix: { copia_cola: PIX } }]) };
   };
   const r = await criarHinova(cfgToken, { fetchImpl }).consultar({ placa: "ABC1D23", cpf: "52998224725" });
   assert.equal(r.resultado, "ok");
@@ -200,11 +200,11 @@ test("boletos: busca o detalhe (/buscar/boleto/{número}) quando falta linha dig
   const urls = [];
   const fetchImpl = async (url, opt) => {
     urls.push(`${opt.method} ${url.replace(/^https:\/\/[^/]+\/api\/sga\/v2/, "")}`);
-    if (url.endsWith("/buscar/boleto/380977")) return { status: 200, text: async () => JSON.stringify({ linha_digitavel: LINHA, link_boleto: "https://b", pix: { copia_e_cola: PIX } }) };
-    return { status: 200, text: async () => JSON.stringify([{ nosso_numero: 380977, data_vencimento: "10/11/2026", situacao_boleto: "ABERTO" }]) };
+    if (url.endsWith("/buscar/boleto/380977")) return { status: 200, text: async () => JSON.stringify({ linha_digitavel: LINHA, link_boleto: "https://b", pix: { copia_cola: PIX } }) };
+    return { status: 200, text: async () => JSON.stringify([{ nosso_numero: 380977, data_vencimento: "10/11/2026", descricao_situacao_boleto: "ABERTO" }]) };
   };
   const b = await criarHinova(lerConfig({ HINOVA_TOKEN: "t" }).hinova, { fetchImpl }).buscarBoletoAberto({ placa: "PGN3D63" });
-  assert.deepEqual(b, { vencimento: "10/11/2026", linhaDigitavel: LINHA, link: "https://b/", pix: PIX });
+  assert.deepEqual(b, { vencimento: "10/11/2026", linhaDigitavel: LINHA, link: "https://b/", pix: PIX, alertas: [] });
   assert.deepEqual(urls, ["POST /listar/boleto-associado-veiculo", "GET /buscar/boleto/380977"]);
 });
 
@@ -212,7 +212,7 @@ test("só rotas de boleto (HINOVA_PATH_VEICULO vazio): CPF e telefone vêm da li
   const urls = [];
   const fetchImpl = async (url) => {
     urls.push(url);
-    return { status: 200, text: async () => JSON.stringify([{ cpf: "529.982.247-25", telefone_celular: "(11) 98765-4321", data_vencimento: "10/11/2026", situacao_boleto: "ABERTO", linha_digitavel: LINHA, link_boleto: "https://b", pix: PIX }]) };
+    return { status: 200, text: async () => JSON.stringify([{ cpf: "529.982.247-25", telefone_celular: "(11) 98765-4321", data_vencimento: "10/11/2026", descricao_situacao_boleto: "ABERTO", linha_digitavel: LINHA, link_boleto: "https://b", pix: { copia_cola: PIX } }]) };
   };
   const cfgBoleto = lerConfig({ HINOVA_TOKEN: "t", HINOVA_PATH_VEICULO: "" }).hinova;
   const h = criarHinova(cfgBoleto, { fetchImpl });
@@ -264,7 +264,7 @@ function apiN8n({ boletos }) {
     const caminho = url.replace(/^https:\/\/[^/]+\/api\/sga\/v2/, "");
     urls.push(`${opt.method} ${caminho}`);
     if (caminho === "/listar/boleto-associado-veiculo") return { status: 200, text: async () => JSON.stringify(boletos) };
-    if (caminho === "/buscar/boleto/380977") return { status: 200, text: async () => JSON.stringify({ linha_digitavel: LINHA, pix: { copia_e_cola: PIX, imagem: "iVBORw0KGgo=" } }) };
+    if (caminho === "/buscar/boleto/380977") return { status: 200, text: async () => JSON.stringify({ linha_digitavel: LINHA, pix: { qrcode: "iVBORw0KGgo=", copia_cola: PIX } }) };
     return { status: 404, text: async () => "{}" };
   };
   return { fetchImpl, urls };
@@ -273,7 +273,7 @@ const cfgToken = lerConfig({ HINOVA_TOKEN: "t" }).hinova;
 
 test("fluxo n8n: telefone e CPF vêm da lista; veículo não é consultado; detalhe pelo nosso_numero", async () => {
   const api = apiN8n({ boletos: [
-    { nosso_numero: 380977, data_vencimento: "05/11/2026", situacao_boleto: "ABERTO", cpf_associado: "529.982.247-25", telefone_celular: "(87) 999999999" }
+    { nosso_numero: 380977, data_vencimento: "05/11/2026", descricao_situacao_boleto: "ABERTO", cpf_associado: "529.982.247-25", telefone_celular: "(87) 999999999" }
   ] });
   const r = await criarHinova(cfgToken, { fetchImpl: api.fetchImpl }).consultar({ placa: "PGN3D63", cpf: "52998224725" });
   assert.equal(r.resultado, "ok");
@@ -283,23 +283,22 @@ test("fluxo n8n: telefone e CPF vêm da lista; veículo não é consultado; deta
   assert.deepEqual(api.urls, ["POST /listar/boleto-associado-veiculo", "GET /buscar/boleto/380977"]);
 });
 
-test("fluxo n8n: acha telefone e CPF em campos com outro nome (busca automática, só celular)", async () => {
-  const api = apiN8n({ boletos: [
-    { nosso_numero: 380977, data_vencimento: "05/11/2026", situacao_boleto: "ABERTO",
-      associado: { documento_cpf: "52998224725", telefone_fixo: "(87) 3333-4444", celular_associado: "(87) 99999-9999" } }
-  ] });
-  const h = criarHinova(cfgToken, { fetchImpl: api.fetchImpl });
-  const r = await h.consultar({ placa: "PGN3D63", cpf: "52998224725" });
-  assert.equal(r.resultado, "ok");
-  assert.equal(r.telefone, "5587999999999");
-  const t = h.titularDe({ contato: { telefone: "(87) 3333-4444" } });
-  assert.equal(t.telefone, "", "fixo não deve ser usado para WhatsApp na busca automática");
+test("campos com nome parecido NÃO são usados; só os configurados", async () => {
+  const boletos = [{ nosso_numero: 380977, data_vencimento: "05/11/2026", descricao_situacao_boleto: "ABERTO", linha_digitavel: LINHA,
+    pix: { copia_cola: PIX }, cpf_associado: "52998224725", celular_associado: "(87) 99999-9999" }];
+  const semConfig = await criarHinova(lerConfig({ HINOVA_TOKEN: "t", HINOVA_PATH_VEICULO: "" }).hinova, { fetchImpl: apiN8n({ boletos }).fetchImpl })
+    .consultar({ placa: "PGN3D63", cpf: "52998224725" });
+  assert.equal(semConfig.resultado, "sem_telefone", "não pode adivinhar o campo do telefone");
+  const comConfig = await criarHinova(lerConfig({ HINOVA_TOKEN: "t", HINOVA_PATH_VEICULO: "", HINOVA_CAMPO_TELEFONE: "celular_associado" }).hinova, { fetchImpl: apiN8n({ boletos }).fetchImpl })
+    .consultar({ placa: "PGN3D63", cpf: "52998224725" });
+  assert.equal(comConfig.resultado, "ok");
+  assert.equal(comConfig.telefone, "5587999999999");
 });
 
 test("fluxo n8n: boletos de outro CPF na mesma placa não são enviados", async () => {
   const api = apiN8n({ boletos: [
-    { nosso_numero: 111, data_vencimento: "01/10/2026", situacao_boleto: "ABERTO", cpf: "11144477735", telefone_celular: "(11) 911111111", linha_digitavel: LINHA3, link_boleto: "https://outro" },
-    { nosso_numero: 380977, data_vencimento: "05/11/2026", situacao_boleto: "ABERTO", cpf: "52998224725", telefone_celular: "(87) 999999999" }
+    { nosso_numero: 111, data_vencimento: "01/10/2026", descricao_situacao_boleto: "ABERTO", cpf: "11144477735", telefone_celular: "(11) 911111111", linha_digitavel: LINHA3, link_boleto: "https://outro" },
+    { nosso_numero: 380977, data_vencimento: "05/11/2026", descricao_situacao_boleto: "ABERTO", cpf: "52998224725", telefone_celular: "(87) 999999999" }
   ] });
   const r = await criarHinova(cfgToken, { fetchImpl: api.fetchImpl }).consultar({ placa: "PGN3D63", cpf: "52998224725" });
   assert.equal(r.resultado, "ok");
@@ -308,7 +307,7 @@ test("fluxo n8n: boletos de outro CPF na mesma placa não são enviados", async 
 });
 
 test("fluxo n8n: CPF que não está na lista não recebe nada", async () => {
-  const api = apiN8n({ boletos: [{ nosso_numero: 380977, situacao_boleto: "ABERTO", cpf: "11144477735", telefone_celular: "(87) 999999999" }] });
+  const api = apiN8n({ boletos: [{ nosso_numero: 380977, descricao_situacao_boleto: "ABERTO", cpf: "11144477735", telefone_celular: "(87) 999999999" }] });
   const r = await criarHinova(cfgToken, { fetchImpl: api.fetchImpl }).consultar({ placa: "PGN3D63", cpf: "52998224725" });
   assert.equal(r.resultado, "cpf_nao_confere");
   assert.ok(!api.urls.some((u) => u.includes("/buscar/boleto")));
@@ -325,18 +324,27 @@ test("vencimento sempre em DD/MM/AAAA", async () => {
 });
 
 test("PIX copia e cola: só aceita código EMV válido (CRC do Banco Central)", async () => {
-  const { pixValido, acharPix } = await import("../lib/formatar.js");
+  const { pixValido } = await import("../lib/formatar.js");
   assert.equal(pixValido(PIX), PIX);
   assert.equal(pixValido(PIX.replace("Fulano", "Fulana")), null, "CRC não confere");
-  assert.equal(pixValido({ copia_e_cola: PIX }), null, "objeto não é texto");
+  assert.equal(pixValido({ copia_cola: PIX }), null, "objeto não é texto");
   assert.equal(pixValido("[object Object]"), null);
-  assert.equal(pixValido("data:image/png;base64,iVBORw0KGgo="), null);
-  // Encontra o código em qualquer formato de resposta
-  assert.equal(acharPix({ pix: PIX }), PIX);
-  assert.equal(acharPix({ pix: { copia_e_cola: PIX, qrcode_base64: "iVBORw0KGgo=" } }), PIX);
-  assert.equal(acharPix({ pix: [{ tipo: "imagem", valor: "iVBOR" }, { tipo: "emv", valor: PIX }] }), PIX);
-  assert.equal(acharPix({ dados_pix: { qr: { payload: PIX } } }), PIX);
-  assert.equal(acharPix({ pix: { url: "https://pix.exemplo/qr.png" } }), null);
+  assert.equal(pixValido("iVBORw0KGgoAAAANSUhEUgAAAPoAAAD6AQAAAACgl2eQ"), null, "imagem do QR não é PIX");
+});
+
+test("PIX lido só do campo exato pix.copia_cola (nada de busca em outros campos)", async () => {
+  const { pixDoCampo } = await import("../lib/formatar.js");
+  const campos = lerConfig({}).hinova.campos.pix;
+  assert.deepEqual(campos, ["pix.copia_cola"]);
+  assert.equal(pixDoCampo({ pix: { qrcode: "iVBOR", copia_cola: PIX } }, campos).pix, PIX);
+  // Um PIX válido em outro campo não pode ser usado
+  const vizinho = pixDoCampo({ observacao: PIX, pix: { qrcode: "iVBOR" } }, campos);
+  assert.equal(vizinho.pix, null);
+  assert.equal(vizinho.presente, false);
+  // Campo existe mas é inválido: omitido, com alerta
+  const invalido = pixDoCampo({ pix: { copia_cola: "000201xx" } }, campos);
+  assert.equal(invalido.pix, null);
+  assert.equal(invalido.presente, true);
 });
 
 test("mensagem nunca contém [object Object] e omite o que for inválido", () => {
@@ -353,4 +361,35 @@ test("mensagem nunca contém [object Object] e omite o que for inválido", () =>
   const comPix = montarMensagem({ vencimento: "05/11/2026", linhaDigitavel: LINHA, pix: PIX, link: "javascript:alert(1)" }, "Integra");
   assert.match(comPix, /PIX copia e cola: 000201/);
   assert.ok(!comPix.includes("javascript:"), "link não https é omitido");
+});
+
+test("resposta real de /listar/boleto-associado-veiculo (anonimizada): PIX, datas e campos exatos", async () => {
+  const PIX_REAL = "00020101021226770014BR.GOV.BCB.PIX2555api.itau/pix/qr/v2/b25d8c92-2eff-49b0-8ef4-ba91d7e950615204000053039865802BR5915HINOVA PAYMENTS6014BELO HORIZONTE62070503***63049C99";
+  const item = {
+    codigo_associado: 12195, nome_associado: "ASSOCIADO TESTE", cpf_associado: "529.982.247-25", email: "teste@exemplo.com",
+    codigo_boleto: "381011", nosso_numero: 380978, codigo_situacao_boleto: "2", descricao_situacao_boleto: "ABERTO",
+    data_emissao: "2026-09-09", data_vencimento_original: "2026-11-05", data_vencimento: "2026-11-05", valor_boleto: "55.00",
+    linha_digitavel: LINHA, link_boleto: "https://short.hinova.com.br/v2/GyFl7YRm.pdf",
+    short_link: "https://short.hinova.com.br/v2/GyFl7YRm.pdf",
+    pix: { qrcode: "iVBORw0KGgoAAAANSUhEUgAAAPoAAAD6AQAAAACgl2eQAAAC0klEQVR4Xu2X0W3kMAwFpUas", copia_cola: PIX_REAL },
+    veiculos: [{ codigo_veiculo: 5753, placa: "PGN3D63", descricao_situacao_veicul: "ATIVO" }]
+  };
+  const urls = [];
+  const fetchImpl = async (url, opt) => {
+    const caminho = url.replace(/^https:\/\/[^/]+\/api\/sga\/v2/, "");
+    urls.push(`${opt.method} ${caminho}`);
+    if (caminho === "/listar/boleto-associado-veiculo") return { status: 200, text: async () => JSON.stringify([item, item]) };
+    // a lista não traz telefone: vem do veículo (reserva)
+    if (caminho === "/veiculo/buscar/PGN3D63") return { status: 200, text: async () => JSON.stringify({ placa: "PGN3D63", telefone_celular: "(87) 999999999" }) };
+    return { status: 404, text: async () => "{}" };
+  };
+  const r = await criarHinova(lerConfig({ HINOVA_TOKEN: "t" }).hinova, { fetchImpl }).consultar({ placa: "PGN3D63", cpf: "52998224725" });
+  assert.equal(r.resultado, "ok");
+  assert.equal(r.telefone, "5587999999999");
+  assert.deepEqual(r.boleto, { vencimento: "05/11/2026", linhaDigitavel: LINHA, link: "https://short.hinova.com.br/v2/GyFl7YRm.pdf", pix: PIX_REAL, alertas: [] });
+  assert.deepEqual(urls, ["POST /listar/boleto-associado-veiculo", "GET /veiculo/buscar/PGN3D63"], "lista já traz linha e PIX: sem chamada de detalhe");
+  const texto = montarMensagem(r.boleto, "Integra Proteção Veicular");
+  assert.ok(!texto.includes("[object"));
+  assert.match(texto, /Vencimento: 05\/11\/2026/);
+  assert.match(texto, /PIX copia e cola: 00020101021226770014BR\.GOV\.BCB\.PIX/);
 });
