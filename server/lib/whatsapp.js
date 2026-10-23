@@ -16,6 +16,26 @@ export function normalizarTelefone(tel) {
   return null;
 }
 
+// Primeiro celular válido de um campo que pode trazer máscara, zero do DDD ou vários números
+// ("(87) 999999999", "(087) 99999-9999", "(87) 99999-9999 / (87) 3333-4444") → "5587999999999"
+export function extrairTelefone(valor) {
+  const partes = String(valor || "").split(/[\/,;|]|\s+e\s+|\s+ou\s+/i);
+  for (const parte of partes) {
+    const n = normalizarTelefone(parte);
+    if (n) return n;
+  }
+  return normalizarTelefone(valor);
+}
+
+// Mesmo número? Compara já normalizados e tolera a falta do 9º dígito de um dos lados
+export function mesmoTelefone(a, b) {
+  const x = normalizarTelefone(a);
+  const y = normalizarTelefone(b);
+  if (!x || !y) return false;
+  const semNono = (n) => (n.length === 13 && n[4] === "9" ? n.slice(0, 4) + n.slice(5) : n);
+  return x === y || semNono(x) === semNono(y);
+}
+
 export function montarMensagem(boleto, nomeEmpresa) {
   const linhas = [`Olá! Aqui é a ${nomeEmpresa}. Segue a 2ª via do seu boleto:`];
   if (boleto.vencimento) linhas.push(`Vencimento: ${boleto.vencimento}`);

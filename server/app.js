@@ -14,10 +14,10 @@ import express from "express";
 import helmet from "helmet";
 import cors from "cors";
 import rateLimit from "express-rate-limit";
-import { validarPedido, mascararCpf, mascararPlaca } from "./lib/validar.js";
+import { validarPedido, mascararCpf, mascararPlaca, mascararTelefone } from "./lib/validar.js";
 import { normalizarOrigem } from "./lib/config.js";
 import { verificarTurnstile } from "./lib/turnstile.js";
-import { montarMensagem } from "./lib/whatsapp.js";
+import { montarMensagem, mesmoTelefone } from "./lib/whatsapp.js";
 
 export const MENSAGEM_PADRAO =
   "Se os dados estiverem corretos e houver boleto em aberto, enviaremos a 2ª via para o WhatsApp cadastrado em instantes.";
@@ -87,9 +87,11 @@ export function criarApp(cfg, deps) {
     if (r.resultado !== "ok") { log.info(`[boleto] ${r.resultado}: ${ref}`); return r.resultado; }
 
     if (cfg.modo === "homologacao") {
-      const numero = r.telefone.replace(/^55(?=\d{10,11}$)/, "");
-      if (!cfg.whatsapp.permitidosTeste.includes(numero)) {
-        log.info(`[boleto] homologação: telefone fora da lista de teste, nada enviado: ${ref}`);
+      if (!cfg.whatsapp.permitidosTeste.some((n) => mesmoTelefone(n, r.telefone))) {
+        // Só os 4 últimos dígitos e a quantidade, para comparar sem expor os números
+        const resumo = (n) => `${mascararTelefone(n)} (${String(n).replace(/\D/g, "").length} dígitos)`;
+        log.info(`[boleto] homologação: telefone cadastrado ${resumo(r.telefone)} não está na lista de teste ` +
+          `[${cfg.whatsapp.permitidosTeste.map(resumo).join(", ")}], nada enviado: ${ref}`);
         return "bloqueado_homologacao";
       }
     }

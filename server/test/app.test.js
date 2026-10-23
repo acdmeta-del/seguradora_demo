@@ -23,7 +23,7 @@ async function subir(env = {}, { humano = true } = {}) {
       chamadas.hinova++;
       if (placa !== "ABC1D23") return { resultado: "veiculo_nao_encontrado" };
       if (cpf !== CPF_TITULAR) return { resultado: "cpf_nao_confere" };
-      return { resultado: "ok", telefone: TELEFONE, boleto: { vencimento: "10/11/2026", linhaDigitavel: "34191.79001 01043.510047 91020.150008 1 99990000010000", link: "https://exemplo/boleto" } };
+      return { resultado: "ok", telefone: env.TELEFONE_HINOVA || TELEFONE, boleto: { vencimento: "10/11/2026", linhaDigitavel: "34191.79001 01043.510047 91020.150008 1 99990000010000", link: "https://exemplo/boleto" } };
     }
   };
   const whatsapp = { async enviar(tel, texto) { chamadas.enviados.push({ tel, texto }); } };
@@ -144,6 +144,11 @@ test("homologação: só envia para números da lista de teste", async (t) => {
   const dentro = await subir({ MODO: "homologacao", WHATSAPP_TESTE_PERMITIDOS: `(11) 98765-4321` }); t.after(dentro.fim);
   await dentro.post(valido);
   assert.equal(await dentro.app.locals.ultimoProcesso, "enviado");
+
+  // Número da Hinova com máscara e lista com só dígitos (o caso real): precisa bater
+  const formatos = await subir({ MODO: "homologacao", WHATSAPP_TESTE_PERMITIDOS: "11987654321", TELEFONE_HINOVA: "(011) 98765-4321" }); t.after(formatos.fim);
+  await formatos.post(valido);
+  assert.equal(await formatos.app.locals.ultimoProcesso, "enviado");
 });
 
 test("tempo mínimo de resposta igual para associado e não associado", async (t) => {

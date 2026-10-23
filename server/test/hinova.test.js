@@ -39,7 +39,7 @@ test("autentica com o token da associação e usa o token de usuário depois", a
   assert.equal(api.chamadas[0].auth, "Bearer token-associacao");
   assert.deepEqual(JSON.parse(api.chamadas[0].body), { usuario: "api", senha: "senha" });
   assert.equal(api.chamadas[1].auth, "Bearer usuario-1");
-  assert.equal(r.telefone, "11987654321");
+  assert.equal(r.telefone, "5511987654321");
 });
 
 test("escolhe o boleto em aberto mais antigo e ignora os baixados", async () => {
@@ -210,7 +210,7 @@ test("só rotas de boleto (HINOVA_PATH_VEICULO vazio): CPF e telefone vêm da li
   const h = criarHinova(cfgBoleto, { fetchImpl });
   const r = await h.consultar({ placa: "PGN3D63", cpf: "52998224725" });
   assert.equal(r.resultado, "ok");
-  assert.equal(r.telefone, "11987654321");
+  assert.equal(r.telefone, "5511987654321");
   assert.ok(!urls.some((u) => u.includes("/veiculo/")));
   assert.equal((await h.consultar({ placa: "PGN3D63", cpf: "11144477735" })).resultado, "cpf_nao_confere");
 });
@@ -234,4 +234,17 @@ test("token_usuario não expira: autentica uma vez e reaproveita", async () => {
   relogio += 30 * 24 * 60 * 60 * 1000; // 30 dias depois
   await h.listarBoletos({ placa: "ABC1D23" });
   assert.equal(autenticacoes, 1);
+});
+
+test("telefone: extrai o 1º celular válido e normaliza máscara, zero do DDD e vários números", async () => {
+  const { extrairTelefone, mesmoTelefone } = await import("../lib/whatsapp.js");
+  assert.equal(extrairTelefone("(87) 999999999"), "5587999999999");
+  assert.equal(extrairTelefone("(087) 99999-9999"), "5587999999999");
+  assert.equal(extrairTelefone("(87) 99999-9999 / (87) 3333-4444"), "5587999999999");
+  assert.equal(extrairTelefone("+55 (87) 99999-9999"), "5587999999999");
+  assert.equal(extrairTelefone(""), null);
+  assert.ok(mesmoTelefone("87999999999", "(87) 999999999"));
+  assert.ok(mesmoTelefone("5587999999999", "87 99999-9999"));
+  assert.ok(mesmoTelefone("8799999999", "87999999999"));     // sem o 9º dígito de um lado
+  assert.ok(!mesmoTelefone("87999999999", "87988888888"));
 });

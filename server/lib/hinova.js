@@ -17,6 +17,7 @@
  * Placa e CPF chegam aqui já validados (validar.js) e entram codificados no
  * caminho (encodeURIComponent), nunca como texto livre.
  */
+import { extrairTelefone } from "./whatsapp.js";
 // Lê o primeiro campo existente de uma lista ("a", "a.b")
 export function pegar(obj, caminhos) {
   for (const c of caminhos) {
@@ -206,14 +207,14 @@ export function criarHinova(cfg, { fetchImpl = fetch, agora = Date.now } = {}) {
     }
 
     let cpfTitular = digitos(pegar(origem, cfg.campos.cpf));
-    let telefone = digitos(pegar(origem, cfg.campos.telefone));
+    let telefone = extrairTelefone(pegar(origem, cfg.campos.telefone)) || "";
 
     // Se não vieram os dados do titular, busca o associado
     if ((!cpfTitular || !telefone) && cfg.pathAssociado) {
       const { dados } = await get(preencher(cfg.pathAssociado, valores));
       const associado = comoLista(dados)[0] || {};
       cpfTitular = cpfTitular || digitos(pegar(associado, cfg.campos.cpf));
-      telefone = telefone || digitos(pegar(associado, cfg.campos.telefone));
+      telefone = telefone || extrairTelefone(pegar(associado, cfg.campos.telefone)) || "";
     }
 
     if (!cpfTitular) return { resultado: "cpf_titular_nao_encontrado" };
