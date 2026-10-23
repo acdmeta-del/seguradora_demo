@@ -17,7 +17,7 @@ import rateLimit from "express-rate-limit";
 import { validarPedido, mascararCpf, mascararPlaca, mascararTelefone } from "./lib/validar.js";
 import { normalizarOrigem } from "./lib/config.js";
 import { verificarTurnstile } from "./lib/turnstile.js";
-import { montarMensagem, mesmoTelefone } from "./lib/whatsapp.js";
+import { montarMensagens, mesmoTelefone } from "./lib/whatsapp.js";
 
 export const MENSAGEM_PADRAO =
   "Se os dados estiverem corretos e houver boleto em aberto, enviaremos a 2ª via para o WhatsApp cadastrado em instantes.";
@@ -96,7 +96,12 @@ export function criarApp(cfg, deps) {
       }
     }
     for (const a of r.boleto.alertas || []) log.info(`[boleto] alerta: ${a}: ${ref}`);
-    await whatsapp.enviar(r.telefone, montarMensagem(r.boleto, cfg.whatsapp.nomeEmpresa));
+    // Resumo primeiro e o PIX sozinho depois, com uma pausa curta para manter a ordem no WhatsApp
+    const mensagens = montarMensagens(r.boleto, cfg.whatsapp.nomeEmpresa);
+    for (const [i, texto] of mensagens.entries()) {
+      if (i > 0) await esperar(cfg.whatsapp.intervaloMs);
+      await whatsapp.enviar(r.telefone, texto);
+    }
     log.info(`[boleto] enviado: ${ref}`);
     return "enviado";
   }

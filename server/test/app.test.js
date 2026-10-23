@@ -23,7 +23,7 @@ async function subir(env = {}, { humano = true } = {}) {
       chamadas.hinova++;
       if (placa !== "ABC1D23") return { resultado: "veiculo_nao_encontrado" };
       if (cpf !== CPF_TITULAR) return { resultado: "cpf_nao_confere" };
-      return { resultado: "ok", telefone: env.TELEFONE_HINOVA || TELEFONE, boleto: { vencimento: "10/11/2026", linhaDigitavel: "34191.79001 01043.510047 91020.150008 1 99990000010000", link: "https://exemplo/boleto" } };
+      return { resultado: "ok", telefone: env.TELEFONE_HINOVA || TELEFONE, boleto: { vencimento: "10/11/2026", linhaDigitavel: "34191.79001 01043.510047 91020.150008 1 99990000010000", link: "https://exemplo/boleto", pix: env.PIX_HINOVA } };
     }
   };
   const whatsapp = { async enviar(tel, texto) { chamadas.enviados.push({ tel, texto }); } };
@@ -181,4 +181,14 @@ test("preflight (OPTIONS) da origem permitida devolve os cabeçalhos CORS", asyn
   assert.match(r.headers.get("access-control-allow-methods"), /POST/);
   const outra = await s.preflight("https://site-malicioso.com");
   assert.equal(outra.headers.get("access-control-allow-origin"), null);
+});
+
+test("com PIX: envia o resumo e depois o código PIX sozinho, nessa ordem", async (t) => {
+  const PIX = "00020126580014br.gov.bcb.pix0136123e4567-e12b-12d1-a456-4266554400005204000053039865802BR5913Fulano de Tal6008BRASILIA62070503***63041D3D";
+  const s = await subir({ PIX_HINOVA: PIX, WHATSAPP_INTERVALO_MS: "10" }); t.after(s.fim);
+  await s.post(valido);
+  assert.equal(await s.app.locals.ultimoProcesso, "enviado");
+  assert.equal(s.chamadas.enviados.length, 2);
+  assert.match(s.chamadas.enviados[0].texto, /próxima mensagem/);
+  assert.equal(s.chamadas.enviados[1].texto, PIX);
 });

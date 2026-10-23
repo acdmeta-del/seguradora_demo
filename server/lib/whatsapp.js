@@ -37,21 +37,31 @@ export function mesmoTelefone(a, b) {
   return x === y || semNono(x) === semNono(y);
 }
 
-// Cada linha só entra se o valor passar na validação do seu tipo (formatar.js).
-// Valida de novo aqui para que nenhum chamador consiga colocar um objeto ou lixo na mensagem.
-export function montarMensagem(boleto, nomeEmpresa) {
+// Mensagens da 2ª via. Cada dado só entra se passar na validação do seu tipo (formatar.js);
+// valida de novo aqui para que nenhum chamador consiga colocar um objeto ou lixo na mensagem.
+// O PIX vai SOZINHO numa segunda mensagem: no WhatsApp, basta tocar e segurar sobre ela e
+// escolher "Copiar" para levar só o código. Formatação do WhatsApp: *negrito*, ```monoespaçado```.
+export function montarMensagens(boleto, nomeEmpresa) {
   const vencimento = formatarData(boleto.vencimento);
   const linha = linhaDigitavel(boleto.linhaDigitavel);
   const pix = pixValido(boleto.pix);
   const link = linkSeguro(boleto.link);
-  const linhas = [`Olá! Aqui é a ${comoTexto(nomeEmpresa) || "associação"}. Segue a 2ª via do seu boleto:`];
-  if (vencimento) linhas.push(`Vencimento: ${vencimento}`);
-  if (linha) linhas.push(`Linha digitável: ${linha}`);
-  if (pix) linhas.push(`PIX copia e cola: ${pix}`);
-  if (link) linhas.push(`Boleto: ${link}`);
-  linhas.push("Se você não pediu esta mensagem, pode ignorá-la.");
-  return linhas.join("\n");
+  const empresa = comoTexto(nomeEmpresa) || "associação";
+
+  const partes = [`Olá! Aqui é a *${empresa}*.\nSegue a 2ª via do seu boleto.`];
+  if (vencimento) partes.push(`📅 *Vencimento:* ${vencimento}`);
+  if (pix) partes.push("💠 *Pague com PIX:* o código *copia e cola* está na próxima mensagem. Toque e segure sobre ela e escolha *Copiar*.");
+  if (linha) partes.push(`🧾 *Linha digitável:*\n\`\`\`${linha}\`\`\``);
+  if (link) partes.push(`📄 *Boleto em PDF:*\n${link}`);
+  partes.push("_Se você não pediu esta mensagem, pode ignorá-la._");
+
+  const mensagens = [partes.join("\n\n")];
+  if (pix) mensagens.push(pix); // só o código, sem nenhum texto junto
+  return mensagens;
 }
+
+// Versão em texto único (diagnóstico e testes)
+export const montarMensagem = (boleto, nomeEmpresa) => montarMensagens(boleto, nomeEmpresa).join("\n\n");
 
 export function criarWhatsapp(cfg, { fetchImpl = fetch, log = console } = {}) {
   async function postar(url, headers, body) {

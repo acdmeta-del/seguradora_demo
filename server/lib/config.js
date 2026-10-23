@@ -94,6 +94,7 @@ export function lerConfig(env = process.env) {
       evolution: { url: (env.EVOLUTION_URL || "").replace(/\/+$/, ""), instancia: env.EVOLUTION_INSTANCE || "", apikey: env.EVOLUTION_APIKEY || "" },
       zapi: { instancia: env.ZAPI_INSTANCE || "", token: env.ZAPI_TOKEN || "", clientToken: env.ZAPI_CLIENT_TOKEN || "" },
       nomeEmpresa: env.NOME_EMPRESA || "Integra Proteção Veicular",
+      intervaloMs: num(env.WHATSAPP_INTERVALO_MS, 1500), // pausa entre o resumo e o PIX
       timeoutMs: num(env.WHATSAPP_TIMEOUT_MS, 8000)
     }
   };

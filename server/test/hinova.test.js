@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { lerConfig } from "../lib/config.js";
 import { criarHinova } from "../lib/hinova.js";
-import { normalizarTelefone, criarWhatsapp, montarMensagem } from "../lib/whatsapp.js";
+import { normalizarTelefone, criarWhatsapp, montarMensagem, montarMensagens } from "../lib/whatsapp.js";
 
 
 // Valores no formato real (os fictícios simples são recusados pela validação de propósito)
@@ -99,7 +99,7 @@ test("Evolution API: monta a chamada com apikey e número cadastrado", async () 
   assert.equal(pedidos[0].opt.headers.apikey, "chave");
   const corpo = JSON.parse(pedidos[0].opt.body);
   assert.equal(corpo.number, "5511987654321");
-  assert.match(corpo.text, /Linha digitável: 34191\.09933/);
+  assert.match(corpo.text, /Linha digitável:\*\n```34191\.09933/);
 });
 
 test("Z-API: monta a chamada com instância, token e Client-Token", async () => {
@@ -355,12 +355,15 @@ test("mensagem nunca contém [object Object] e omite o que for inválido", () =>
     link: "https://short.hinova.com.br/v2/GyFl7YRm.pdf"
   }, "Integra Proteção Veicular");
   assert.ok(!texto.includes("[object"), texto);
-  assert.match(texto, /Vencimento: 05\/11\/2026/);
-  assert.match(texto, /Linha digitável: 34191\.09933 79997\.470939 75008\.900005 5 16210000005500/);
-  assert.ok(!texto.includes("PIX copia e cola"), "PIX inválido não entra");
-  const comPix = montarMensagem({ vencimento: "05/11/2026", linhaDigitavel: LINHA, pix: PIX, link: "javascript:alert(1)" }, "Integra");
-  assert.match(comPix, /PIX copia e cola: 000201/);
-  assert.ok(!comPix.includes("javascript:"), "link não https é omitido");
+  assert.match(texto, /\*Vencimento:\* 05\/11\/2026/);
+  assert.match(texto, /```34191\.09933 79997\.470939 75008\.900005 5 16210000005500```/);
+  assert.ok(!/PIX|000201/.test(texto), "PIX inválido não entra nem é anunciado");
+  const comPix = montarMensagens({ vencimento: "05/11/2026", linhaDigitavel: LINHA, pix: PIX, link: "javascript:alert(1)" }, "Integra");
+  assert.equal(comPix.length, 2);
+  assert.equal(comPix[1], PIX, "a 2ª mensagem é só o código PIX, sem texto junto");
+  assert.match(comPix[0], /próxima mensagem/);
+  assert.ok(!comPix[0].includes("000201"), "o código não vai no resumo");
+  assert.ok(!comPix.join("").includes("javascript:"), "link não https é omitido");
 });
 
 test("resposta real de /listar/boleto-associado-veiculo (anonimizada): PIX, datas e campos exatos", async () => {
@@ -390,8 +393,8 @@ test("resposta real de /listar/boleto-associado-veiculo (anonimizada): PIX, data
   assert.deepEqual(urls, ["POST /listar/boleto-associado-veiculo", "GET /veiculo/buscar/PGN3D63"], "lista já traz linha e PIX: sem chamada de detalhe");
   const texto = montarMensagem(r.boleto, "Integra Proteção Veicular");
   assert.ok(!texto.includes("[object"));
-  assert.match(texto, /Vencimento: 05\/11\/2026/);
-  assert.match(texto, /PIX copia e cola: 00020101021226770014BR\.GOV\.BCB\.PIX/);
+  assert.match(texto, /\*Vencimento:\* 05\/11\/2026/);
+  assert.equal(montarMensagens(r.boleto, "Integra")[1], PIX_REAL);
 });
 
 test("escolha do boleto: sem situação ou pago não é enviado; sem linha/PIX passa para o próximo", async () => {
