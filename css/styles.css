@@ -332,6 +332,8 @@ button.hero__tile { width: 100%; border: 0; font-family: inherit; cursor: pointe
 
 /* Faixa verde-escura com o formulário de cotação */
 .quote-form { margin: 0; }
+.quote-form__fields { border: 0; padding: 0; margin: 0; min-inline-size: 0; }
+.quote-form__fields:disabled .btn { opacity: .7; cursor: not-allowed; }
 .hero__cta { padding: var(--space-5); background: var(--color-brand-text); color: #fff; }
 .quote-form__title { color: inherit; font-size: var(--fs-h3); line-height: 1.3; }
 .field { margin-bottom: var(--space-3); }

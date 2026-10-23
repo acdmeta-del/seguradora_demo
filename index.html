@@ -7,9 +7,10 @@
   <title>Integra Proteção Veicular | Cotação grátis</title>
   <meta name="description" content="Proteção veicular com guincho, pane elétrica, pane mecânica, colisão e suporte 24h. Faça sua cotação grátis pelo WhatsApp.">
   <meta name="theme-color" content="#98C61D">
-  <!-- Segurança: de onde a página pode carregar scripts e para onde pode enviar dados.
+  <!-- Segurança: envios nativos de formulários são bloqueados; cotação usa WhatsApp via JS
+       e boleto usa fetch. Isso impede GET com dados pessoais se o script falhar.
        PERSONALIZAR: ao ter a URL definitiva do intermediário, troque https://*.easypanel.host por ela. -->
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' https://*.easypanel.host https://challenges.cloudflare.com; frame-src https://challenges.cloudflare.com; object-src 'none'; base-uri 'self'; form-action 'self'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' https://*.easypanel.host https://challenges.cloudflare.com; frame-src https://challenges.cloudflare.com; object-src 'none'; base-uri 'self'; form-action 'none'">
   <meta name="referrer" content="strict-origin-when-cross-origin">
   <link rel="icon" href="assets/escudo-ativo.svg" type="image/svg+xml">
 
@@ -84,23 +85,28 @@
             </div>
 
             <form class="hero__cta quote-form" id="cotacao" novalidate aria-labelledby="form-titulo">
-              <h2 class="quote-form__title" id="form-titulo" data-text="hero.formTitulo"></h2>
-              <div class="field">
-                <label for="f-nome" data-text="hero.campos.nome"></label>
-                <input id="f-nome" name="nome" type="text" autocomplete="name" required>
-              </div>
-              <div class="field">
-                <label for="f-whats" data-text="hero.campos.whatsapp"></label>
-                <input id="f-whats" name="whatsapp" type="tel" inputmode="tel" autocomplete="tel" placeholder="(00) 00000-0000" required>
-              </div>
-              <div class="field">
-                <label for="f-veiculo" data-text="hero.campos.veiculo"></label>
-                <input id="f-veiculo" name="veiculo" type="text" autocomplete="off" placeholder="Ex.: ABC1D23 ou Onix 2020" required>
-              </div>
-              <p class="quote-form__error" role="alert" hidden></p>
-              <button class="btn btn--light btn--block" type="submit">
-                <span data-icon="whatsapp"></span><span data-text="hero.botao"></span>
-              </button>
+              <h2 class="quote-form__title" id="form-titulo" data-text="hero.formTitulo">Faça sua cotação grátis em menos de um minuto.</h2>
+              <!-- Só habilitar após registrar o tratamento seguro de submit em main.js. -->
+              <fieldset class="quote-form__fields" disabled>
+                <div class="field">
+                  <label for="f-nome" data-text="hero.campos.nome"></label>
+                  <input id="f-nome" name="nome" type="text" autocomplete="name" required>
+                </div>
+                <div class="field">
+                  <label for="f-whats" data-text="hero.campos.whatsapp"></label>
+                  <input id="f-whats" name="whatsapp" type="tel" inputmode="tel" autocomplete="tel" placeholder="(00) 00000-0000" required>
+                </div>
+                <div class="field">
+                  <label for="f-veiculo" data-text="hero.campos.veiculo"></label>
+                  <input id="f-veiculo" name="veiculo" type="text" autocomplete="off" placeholder="Ex.: ABC1D23 ou Onix 2020" required>
+                </div>
+                <p class="quote-form__error" role="alert" hidden></p>
+                <button class="btn btn--light btn--block" type="submit">
+                  <span data-icon="whatsapp"></span><span data-text="hero.botao"></span>
+                </button>
+              </fieldset>
+              <!-- Fora de noscript: também aparece se main.js ou content.js falhar. -->
+              <p class="quote-form__note" id="cotacao-indisponivel" role="status">O formulário está indisponível. Ative o JavaScript e recarregue a página. Se o problema continuar, fale com a Integra pelo WhatsApp (00) 00000-0000 ou pelo e-mail contato@exemplo.com.br.</p>
               <p class="quote-form__note" data-text="hero.formNota"></p>
             </form>
           </div>
