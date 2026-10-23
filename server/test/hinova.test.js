@@ -221,3 +221,17 @@ test("credenciais: remove espaços nas pontas e \"Bearer \" colado no token", ()
   assert.equal(c.usuario, "api");
   assert.equal(c.modoAuth, "usuario");
 });
+
+test("token_usuario não expira: autentica uma vez e reaproveita", async () => {
+  let autenticacoes = 0;
+  let relogio = 0;
+  const fetchImpl = async (url) => {
+    if (url.endsWith("/usuario/autenticar")) { autenticacoes++; return { status: 200, text: async () => JSON.stringify({ mensagem: "OK", token_usuario: "hash" }) }; }
+    return { status: 200, text: async () => "[]" };
+  };
+  const h = criarHinova(cfg, { fetchImpl, agora: () => relogio });
+  await h.autenticar();
+  relogio += 30 * 24 * 60 * 60 * 1000; // 30 dias depois
+  await h.listarBoletos({ placa: "ABC1D23" });
+  assert.equal(autenticacoes, 1);
+});

@@ -1,11 +1,15 @@
 /*
  * Cliente do SGA Hinova (API v2).
  *
- * Autenticação (HINOVA_AUTH):
- *   token   → o token da associação (HINOVA_TOKEN, gerado em Área do cliente > APIs >
- *             Gerenciar APIs) vai direto em "Authorization: Bearer ...". Padrão sem usuário/senha.
- *   usuario → o token da associação + HINOVA_USUARIO/HINOVA_SENHA geram um token_usuario
- *             em /usuario/autenticar, guardado em cache e renovado ao expirar ou receber 401.
+ * Autenticação (documentação oficial, "Autenticar Usuário"):
+ *   POST /usuario/autenticar
+ *     Authorization: Bearer {token gerado no SGA pela associação}  (HINOVA_TOKEN)
+ *     { "usuario": "...", "senha": "..." }   (usuário ATIVO do SGA: HINOVA_USUARIO/HINOVA_SENHA)
+ *   → { "mensagem": "OK", "token_usuario": "..." }, usado como Bearer nas demais requisições.
+ *   O token_usuario NÃO expira: fica em memória e só é pedido de novo se a Hinova responder 401.
+ *
+ * HINOVA_AUTH=usuario faz esse fluxo. HINOVA_AUTH=token usa HINOVA_TOKEN direto nas consultas,
+ * para quando ele já for um token_usuario obtido antes (como no n8n).
  *
  * Os caminhos e nomes de campos vêm da configuração (config.js) porque precisam
  * ser conferidos na documentação do SGA do cliente. Use "npm run testar-hinova".
@@ -13,8 +17,6 @@
  * Placa e CPF chegam aqui já validados (validar.js) e entram codificados no
  * caminho (encodeURIComponent), nunca como texto livre.
  */
-const TOKEN_TTL_MS = 50 * 60 * 1000;
-
 // Lê o primeiro campo existente de uma lista ("a", "a.b")
 export function pegar(obj, caminhos) {
   for (const c of caminhos) {
@@ -70,7 +72,6 @@ export function diagnosticar(status, dados) {
 
 export function criarHinova(cfg, { fetchImpl = fetch, agora = Date.now } = {}) {
   let tokenUsuario = null;
-  let tokenValidoAte = 0;
 
   const preencher = (modelo, valores) =>
     modelo.replace(/\{(\w+)\}/g, (_, k) => encodeURIComponent(valores[k] ?? ""));
@@ -90,7 +91,7 @@ export function criarHinova(cfg, { fetchImpl = fetch, agora = Date.now } = {}) {
 
   async function autenticar(forcar = false) {
     if (cfg.modoAuth === "token") return cfg.token;
-    if (!forcar && tokenUsuario && agora() < tokenValidoAte) return tokenUsuario;
+    if (!forcar && tokenUsuario) return tokenUsuario; // não expira (documentação)
     const { status, dados } = await chamar("POST", cfg.pathAutenticar, {
       auth: cfg.token,
       body: { usuario: cfg.usuario, senha: cfg.senha }
@@ -102,7 +103,6 @@ export function criarHinova(cfg, { fetchImpl = fetch, agora = Date.now } = {}) {
       throw erro;
     }
     tokenUsuario = t;
-    tokenValidoAte = agora() + TOKEN_TTL_MS;
     return t;
   }
 

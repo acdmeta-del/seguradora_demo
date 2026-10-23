@@ -63,7 +63,7 @@ if (cfg.modoAuth === "usuario") {
   const senha = process.env.HINOVA_SENHA || "";
   console.log(`  HINOVA_SENHA: ${senha ? `${senha.length} caracteres` : "VAZIA"}${/[#$"'\\ ]/.test(senha) ? " | ATENÇÃO: tem # $ aspas barra ou espaço; confira se o Easypanel gravou igual" : ""}`);
 }
-console.log(`  Modo de autenticação: ${cfg.modoAuth}${cfg.modoAuth === "token" ? " (só o token; a documentação oficial pede também usuário/senha: HINOVA_AUTH=usuario)" : ""}`);
+console.log(`  Modo de autenticação: ${cfg.modoAuth}${cfg.modoAuth === "token" ? " (HINOVA_TOKEN precisa ser um token_usuario; o token gerado em Gerenciar APIs exige HINOVA_AUTH=usuario)" : ""}`);
 
 // 1. Autenticação
 if (cfg.modoAuth === "token") {
@@ -110,6 +110,6 @@ try {
 } catch (e) { falhou(e); }
 
 console.log(falhas
-  ? "\nAlgo falhou. Se for 401/\"Login ou senha inválido\", o token não foi aceito: confira HINOVA_TOKEN (sem espaços) e as rotas liberadas em Gerenciar APIs."
+  ? "\nAlgo falhou. \"Usuário ou senha inválidos\" na etapa 1: o usuário precisa estar ATIVO no SGA e ser da associação do token. 401 nas consultas: confira as rotas liberadas em Gerenciar APIs."
   : "\nSe algum campo saiu como NÃO ENCONTRADO, ajuste HINOVA_CAMPO_* com os nomes listados acima.");
 process.exit(falhas ? 1 : 0);
