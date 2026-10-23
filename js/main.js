@@ -228,6 +228,10 @@
       if (win) win.opener = null;
       else window.location.href = url; // pop-up bloqueado
     });
+
+    // Falha segura: campos só ficam disponíveis com o listener já registrado.
+    $(".quote-form__fields", form).disabled = false;
+    $("#cotacao-indisponivel").hidden = true;
   }
 
   /* ---------- Diálogos (privacidade, 2ª via de boleto) ---------- */

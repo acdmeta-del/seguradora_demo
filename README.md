@@ -32,6 +32,39 @@ O carro entra pela direita assim que a página carrega, sempre, mesmo com as ani
 
 No desktop, o texto do topo acompanha a rolagem (sticky) até o fim do formulário ao lado; em telas com menos de 700 px de altura ele rola normalmente.
 
+## Segurança do formulário de cotação
+
+O formulário começa com os campos e o botão desabilitados no HTML. `initForm` só os
+habilita depois de registrar o listener de `submit`, que chama `preventDefault()`
+antes de ler os dados. Se JavaScript estiver desativado, `content.js`/`main.js` não
+carregar ou a inicialização falhar antes desse ponto, o formulário continua
+desabilitado e uma mensagem estática orienta o contato alternativo.
+
+A CSP usa `form-action 'none'` como proteção adicional: nenhum formulário pode
+enviar dados por navegação nativa, inclusive por `form.submit()`. O envio intencional
+para o WhatsApp continua pelo JavaScript; `fetch` do boleto continua controlado por
+`connect-src`. O fechamento da política de privacidade usa `method="dialog"` e não
+faz uma requisição. Se um formulário com envio nativo for adicionado no futuro,
+seu destino deve ser revisado antes de alterar essa política.
+
+O aviso de indisponibilidade em `index.html` é estático para funcionar mesmo sem
+`content.js`. Ao personalizar os contatos, atualize também esse aviso e `noscript`.
+
+### Testes do navegador
+
+O site continua sem build. Para rodar os testes de regressão (Node.js 18+):
+
+```sh
+npm ci
+npx playwright install chromium
+npm test
+```
+
+Os testes usam um servidor local e dados fictícios, sem acessar serviços externos.
+Cobrem JavaScript desativado, scripts ausentes, falhas de inicialização e de submit,
+envio nativo forçado, validação, máscara, clique/Enter, pop-up bloqueado e a
+compatibilidade da CSP com o diálogo e com `fetch`.
+
 ## 2ª via de boleto (SGA Hinova)
 
 O atalho "2ª via de boleto" abre um pop-up que pede **placa** e **CPF do titular**. O site **não mostra o boleto**: um intermediário (pasta `server/`) consulta o SGA Hinova e envia a 2ª via para o **WhatsApp cadastrado** do associado.
