@@ -54,12 +54,12 @@ test("CPF diferente do titular não segue para o boleto", async () => {
   const h = criarHinova(cfg, { fetchImpl: api.fetchImpl });
   const r = await h.consultar({ placa: "ABC1D23", cpf: "11144477735" });
   assert.equal(r.resultado, "cpf_nao_confere");
-  assert.ok(!api.chamadas.some((c) => c.caminho.startsWith("/listar")));
+  assert.ok(!api.chamadas.some((c) => c.caminho.startsWith("/buscar/boleto")));
 });
 
-test("veículo inexistente (404) não é erro", async () => {
+test("sem CPF na lista e veículo inexistente (404): não é erro e não envia", async () => {
   const h = criarHinova(cfg, { fetchImpl: apiFalsa().fetchImpl });
-  assert.equal((await h.consultar({ placa: "ZZZ9Z99", cpf: "52998224725" })).resultado, "veiculo_nao_encontrado");
+  assert.equal((await h.consultar({ placa: "ZZZ9Z99", cpf: "52998224725" })).resultado, "cpf_titular_nao_encontrado");
 });
 
 test("token de usuário expirado (401): autentica de novo e repete", async () => {
@@ -158,10 +158,10 @@ test("modo token (padrão sem usuário/senha): usa o token da associação diret
   assert.ok(!chamadas.some((c) => c.url.includes("/usuario/autenticar")));
 });
 
-test("406 da Hinova = veículo não encontrado", async () => {
-  const fetchImpl = async () => ({ status: 406, text: async () => JSON.stringify({ mensagem: "Veículo não encontrado" }) });
+test("406 da Hinova = não encontrado (sem boletos no período)", async () => {
+  const fetchImpl = async () => ({ status: 406, text: async () => JSON.stringify({ mensagem: "Nenhum registro encontrado" }) });
   const h = criarHinova(lerConfig({ HINOVA_TOKEN: "t" }).hinova, { fetchImpl });
-  assert.equal((await h.consultar({ placa: "ABC1D23", cpf: "52998224725" })).resultado, "veiculo_nao_encontrado");
+  assert.equal((await h.consultar({ placa: "ABC1D23", cpf: "52998224725" })).resultado, "sem_boleto_no_periodo");
 });
 
 test("rota recusada com HTTP 200 e { error }: falha com diagnóstico", async () => {
@@ -247,4 +247,61 @@ test("telefone: extrai o 1º celular válido e normaliza máscara, zero do DDD e
   assert.ok(mesmoTelefone("5587999999999", "87 99999-9999"));
   assert.ok(mesmoTelefone("8799999999", "87999999999"));     // sem o 9º dígito de um lado
   assert.ok(!mesmoTelefone("87999999999", "87988888888"));
+});
+
+// Simula o fluxo do n8n: a lista traz CPF e telefone; o detalhe traz linha digitável e PIX
+function apiN8n({ boletos }) {
+  const urls = [];
+  const fetchImpl = async (url, opt) => {
+    const caminho = url.replace(/^https:\/\/[^/]+\/api\/sga\/v2/, "");
+    urls.push(`${opt.method} ${caminho}`);
+    if (caminho === "/listar/boleto-associado-veiculo") return { status: 200, text: async () => JSON.stringify(boletos) };
+    if (caminho === "/buscar/boleto/380977") return { status: 200, text: async () => JSON.stringify({ linha_digitavel: "LINHA-380977", pix_copia_cola: "PIX-380977" }) };
+    return { status: 404, text: async () => "{}" };
+  };
+  return { fetchImpl, urls };
+}
+const cfgToken = lerConfig({ HINOVA_TOKEN: "t" }).hinova;
+
+test("fluxo n8n: telefone e CPF vêm da lista; veículo não é consultado; detalhe pelo nosso_numero", async () => {
+  const api = apiN8n({ boletos: [
+    { nosso_numero: 380977, data_vencimento: "05/11/2026", situacao_boleto: "ABERTO", cpf_associado: "529.982.247-25", telefone_celular: "(87) 999999999" }
+  ] });
+  const r = await criarHinova(cfgToken, { fetchImpl: api.fetchImpl }).consultar({ placa: "PGN3D63", cpf: "52998224725" });
+  assert.equal(r.resultado, "ok");
+  assert.equal(r.telefone, "5587999999999");
+  assert.equal(r.boleto.linhaDigitavel, "LINHA-380977");
+  assert.equal(r.boleto.pix, "PIX-380977");
+  assert.deepEqual(api.urls, ["POST /listar/boleto-associado-veiculo", "GET /buscar/boleto/380977"]);
+});
+
+test("fluxo n8n: acha telefone e CPF em campos com outro nome (busca automática, só celular)", async () => {
+  const api = apiN8n({ boletos: [
+    { nosso_numero: 380977, data_vencimento: "05/11/2026", situacao_boleto: "ABERTO",
+      associado: { documento_cpf: "52998224725", telefone_fixo: "(87) 3333-4444", celular_associado: "(87) 99999-9999" } }
+  ] });
+  const h = criarHinova(cfgToken, { fetchImpl: api.fetchImpl });
+  const r = await h.consultar({ placa: "PGN3D63", cpf: "52998224725" });
+  assert.equal(r.resultado, "ok");
+  assert.equal(r.telefone, "5587999999999");
+  const t = h.titularDe({ contato: { telefone: "(87) 3333-4444" } });
+  assert.equal(t.telefone, "", "fixo não deve ser usado para WhatsApp na busca automática");
+});
+
+test("fluxo n8n: boletos de outro CPF na mesma placa não são enviados", async () => {
+  const api = apiN8n({ boletos: [
+    { nosso_numero: 111, data_vencimento: "01/10/2026", situacao_boleto: "ABERTO", cpf: "11144477735", telefone_celular: "(11) 911111111", linha_digitavel: "DE-OUTRO", link_boleto: "x" },
+    { nosso_numero: 380977, data_vencimento: "05/11/2026", situacao_boleto: "ABERTO", cpf: "52998224725", telefone_celular: "(87) 999999999" }
+  ] });
+  const r = await criarHinova(cfgToken, { fetchImpl: api.fetchImpl }).consultar({ placa: "PGN3D63", cpf: "52998224725" });
+  assert.equal(r.resultado, "ok");
+  assert.equal(r.telefone, "5587999999999");
+  assert.equal(r.boleto.linhaDigitavel, "LINHA-380977");
+});
+
+test("fluxo n8n: CPF que não está na lista não recebe nada", async () => {
+  const api = apiN8n({ boletos: [{ nosso_numero: 380977, situacao_boleto: "ABERTO", cpf: "11144477735", telefone_celular: "(87) 999999999" }] });
+  const r = await criarHinova(cfgToken, { fetchImpl: api.fetchImpl }).consultar({ placa: "PGN3D63", cpf: "52998224725" });
+  assert.equal(r.resultado, "cpf_nao_confere");
+  assert.ok(!api.urls.some((u) => u.includes("/buscar/boleto")));
 });

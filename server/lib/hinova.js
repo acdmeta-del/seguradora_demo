@@ -37,6 +37,27 @@ export function comoLista(resposta) {
   return [];
 }
 
+// Procura, em até 3 níveis, o 1º campo cujo nome casa com os padrões (em ordem de prioridade)
+// e cujo valor é aceito por "aceitar". Devolve { valor, campo } ou null.
+export function procurarCampo(obj, padroes, aceitar) {
+  for (const padrao of padroes) {
+    const pilha = [[obj, "", 0]];
+    while (pilha.length) {
+      const [o, prefixo, nivel] = pilha.shift();
+      if (!o || typeof o !== "object" || nivel > 3) continue;
+      for (const [k, v] of Object.entries(o)) {
+        const campo = prefixo + k;
+        if (v && typeof v === "object") { pilha.push([v, campo + ".", nivel + 1]); continue; }
+        if (padrao.test(k)) {
+          const valor = aceitar(v);
+          if (valor) return { valor, campo };
+        }
+      }
+    }
+  }
+  return null;
+}
+
 const semAcento = (s) => String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toUpperCase();
 
 // "dd/mm/aaaa" ou "aaaa-mm-dd" → número comparável
@@ -190,41 +211,68 @@ export function criarHinova(cfg, { fetchImpl = fetch, agora = Date.now } = {}) {
 
   // Fluxo completo: titular confere com o CPF → boleto em aberto → telefone cadastrado.
   // Com HINOVA_PATH_VEICULO vazio, usa só as rotas de boleto (CPF/telefone vêm da lista de boletos).
+  // CPF e telefone do titular num registro: primeiro os campos configurados (HINOVA_CAMPO_*),
+  // depois uma busca por nomes parecidos. Na busca automática, telefone só vale se for celular.
+  function titularDe(obj) {
+    const cpfCfg = digitos(pegar(obj, cfg.campos.cpf));
+    const telCfg = extrairTelefone(pegar(obj, cfg.campos.telefone));
+    const cpfAuto = cpfCfg ? null : procurarCampo(obj, [/cpf/i], (v) => (/^\d{11}$/.test(digitos(v)) ? digitos(v) : null));
+    const telAuto = telCfg ? null : procurarCampo(obj, [/celular|whats/i, /telefone|fone/i], (v) => {
+      const n = extrairTelefone(v);
+      return n && n.length === 13 && n[4] === "9" ? n : null;
+    });
+    return {
+      cpf: cpfCfg || cpfAuto?.valor || "",
+      telefone: telCfg || telAuto?.valor || "",
+      campoCpf: cpfCfg ? "config" : cpfAuto?.campo,
+      campoTelefone: telCfg ? "config" : telAuto?.campo
+    };
+  }
+
+  // Fluxo igual ao do n8n do cliente:
+  //   1. POST /listar/boleto-associado-veiculo (placa + período) → CPF do titular e telefone
+  //   2. confere o CPF informado com o do titular (só segue com os boletos desse CPF)
+  //   3. boleto em aberto → GET /buscar/boleto/{nosso_numero} → linha digitável e PIX
+  // Veículo (HINOVA_PATH_VEICULO) e associado (HINOVA_PATH_ASSOCIADO) só são consultados
+  // se a lista não trouxer o CPF ou o telefone.
   async function consultar({ placa, cpf }) {
     const valores = { placa, cpf };
-    let origem = null;
-    let lista = null;
+    const lista = await listarBoletos(valores);
+    if (!lista.length) return { resultado: "sem_boleto_no_periodo" };
 
-    if (cfg.pathVeiculo) {
-      origem = await buscarVeiculo(placa);
-      if (!origem) return { resultado: "veiculo_nao_encontrado" };
-      valores.codigo_veiculo = pegar(origem, cfg.campos.codigoVeiculo);
-      valores.codigo_associado = pegar(origem, cfg.campos.codigoAssociado);
-    } else {
-      lista = await listarBoletos(valores);
-      if (!lista.length) return { resultado: "sem_boleto_no_periodo" };
-      origem = lista[0];
+    const dados = lista.map(titularDe);
+    const comCpf = dados.filter((d) => d.cpf);
+    let cpfTitular = comCpf.length ? (comCpf.some((d) => d.cpf === cpf) ? cpf : comCpf[0].cpf) : "";
+    // Só os boletos do CPF informado (ou sem CPF no registro) seguem adiante
+    const doTitular = lista.filter((_, i) => !dados[i].cpf || dados[i].cpf === cpf);
+    let telefone = (dados.find((d, i) => d.telefone && doTitular.includes(lista[i])) || {}).telefone || "";
+
+    // Reservas: veículo e associado, só para completar o que faltou
+    if ((!cpfTitular || !telefone) && cfg.pathVeiculo) {
+      const veiculo = await buscarVeiculo(placa);
+      if (veiculo) {
+        valores.codigo_veiculo = pegar(veiculo, cfg.campos.codigoVeiculo);
+        valores.codigo_associado = pegar(veiculo, cfg.campos.codigoAssociado);
+        const t = titularDe(veiculo);
+        cpfTitular = cpfTitular || t.cpf;
+        telefone = telefone || t.telefone;
+      }
     }
-
-    let cpfTitular = digitos(pegar(origem, cfg.campos.cpf));
-    let telefone = extrairTelefone(pegar(origem, cfg.campos.telefone)) || "";
-
-    // Se não vieram os dados do titular, busca o associado
     if ((!cpfTitular || !telefone) && cfg.pathAssociado) {
-      const { dados } = await get(preencher(cfg.pathAssociado, valores));
-      const associado = comoLista(dados)[0] || {};
-      cpfTitular = cpfTitular || digitos(pegar(associado, cfg.campos.cpf));
-      telefone = telefone || extrairTelefone(pegar(associado, cfg.campos.telefone)) || "";
+      const { dados: resp } = await get(preencher(cfg.pathAssociado, valores));
+      const t = titularDe(comoLista(resp)[0] || {});
+      cpfTitular = cpfTitular || t.cpf;
+      telefone = telefone || t.telefone;
     }
 
     if (!cpfTitular) return { resultado: "cpf_titular_nao_encontrado" };
     if (cpfTitular !== cpf) return { resultado: "cpf_nao_confere" };
 
-    const boleto = await buscarBoletoAberto(valores, lista);
+    const boleto = await buscarBoletoAberto(valores, doTitular);
     if (!boleto) return { resultado: "sem_boleto_aberto" };
     if (!telefone) return { resultado: "sem_telefone" };
     return { resultado: "ok", telefone, boleto };
   }
 
-  return { autenticar, buscarVeiculo, listarBoletos, buscarBoletoAberto, consultar, _chamar: chamar, _get: get, _preencher: preencher };
+  return { autenticar, buscarVeiculo, listarBoletos, buscarBoletoAberto, consultar, titularDe, _chamar: chamar, _get: get, _preencher: preencher };
 }

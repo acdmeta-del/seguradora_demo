@@ -8,7 +8,7 @@
  */
 import { lerConfig } from "../lib/config.js";
 import { criarHinova, comoLista, pegar } from "../lib/hinova.js";
-import { extrairTelefone, mesmoTelefone } from "../lib/whatsapp.js";
+import { mesmoTelefone } from "../lib/whatsapp.js";
 import { normalizarPlaca, normalizarCpf, mascararCpf, mascararTelefone } from "../lib/validar.js";
 
 const [placaArg, cpfArg] = process.argv.slice(2);
@@ -34,12 +34,12 @@ function estrutura(obj, prefixo = "", nivel = 0) {
 }
 const digitos = (v) => String(v || "").replace(/\D/g, "");
 function titular(obj) {
-  const c = digitos(pegar(obj, cfg.campos.cpf));
-  const t = extrairTelefone(pegar(obj, cfg.campos.telefone));
+  const t = h.titularDe(obj);
   const teste = String(process.env.WHATSAPP_TESTE_PERMITIDOS || "").split(",").filter((n) => n.trim());
-  console.log(`  CPF do titular (${cfg.campos.cpf.join(" | ")}): ${c ? `${mascararCpf(c)} (confere: ${c === cpf ? "sim" : "não"})` : "NÃO ENCONTRADO"}`);
-  console.log(`  Telefone (${cfg.campos.telefone.join(" | ")}): ${t ? `${mascararTelefone(t)}, enviado como ${t.length} dígitos` : "NÃO ENCONTRADO"}`);
-  if (t && teste.length) console.log(`  Está em WHATSAPP_TESTE_PERMITIDOS: ${teste.some((n) => mesmoTelefone(n, t)) ? "sim" : "NÃO (confira o número cadastrado na Hinova)"}`);
+  const de = (campo) => (campo === "config" ? "campos configurados" : campo ? `campo "${campo}"` : "");
+  console.log(`  CPF do titular: ${t.cpf ? `${mascararCpf(t.cpf)} (confere: ${t.cpf === cpf ? "sim" : "não"}; ${de(t.campoCpf)})` : "NÃO ENCONTRADO"}`);
+  console.log(`  Telefone: ${t.telefone ? `${mascararTelefone(t.telefone)}, enviado como ${t.telefone.length} dígitos (${de(t.campoTelefone)})` : "NÃO ENCONTRADO"}`);
+  if (t.telefone && teste.length) console.log(`  Está em WHATSAPP_TESTE_PERMITIDOS: ${teste.some((n) => mesmoTelefone(n, t.telefone)) ? "sim" : "NÃO (confira o número cadastrado na Hinova)"}`);
 }
 function falhou(e) {
   falhas++;
@@ -88,7 +88,7 @@ if (cfg.pathVeiculo) {
   etapa(2, "Veículo: não consultado (HINOVA_PATH_VEICULO vazio; usa a lista de boletos)");
 }
 
-// 3. Lista de boletos (mesma chamada do n8n)
+// 3. Lista de boletos (mesma chamada do n8n): de onde vêm o CPF do titular e o telefone
 etapa(3, `Boletos: ${cfg.metodoBoletos} ${cfg.pathBoletos} (vencimento de -${cfg.boletoDiasAntes} a +${cfg.boletoDiasDepois} dias)`);
 try {
   const lista = await h.listarBoletos({ placa, cpf });
