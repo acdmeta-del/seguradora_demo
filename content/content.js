@@ -175,7 +175,7 @@ window.SITE_CONTENT = {
     sucesso: "Pronto! Se os dados estiverem corretos e houver boleto em aberto, a 2ª via chega no WhatsApp cadastrado em instantes.",
     // PERSONALIZAR: URL do intermediário no Easypanel, ex.: "https://boleto-integra.xxxx.easypanel.host/api/boleto".
     // Vazio = modo demonstração (resposta simulada no navegador, sem consulta real).
-    endpoint: "",
+    endpoint: "https://integra-demo.enwglb.easypanel.host/api/boleto",
     // PERSONALIZAR: chave de SITE do Cloudflare Turnstile (pública). A chave SECRETA vai só no servidor.
     // "1x00000000000000000000AA" é a chave de teste da Cloudflare (sempre aprova).
     turnstileSiteKey: "1x00000000000000000000AA"
