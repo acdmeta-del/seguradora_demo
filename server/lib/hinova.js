@@ -11,8 +11,9 @@
  * HINOVA_AUTH=usuario faz esse fluxo. HINOVA_AUTH=token usa HINOVA_TOKEN direto nas consultas,
  * para quando ele já for um token_usuario obtido antes (como no n8n).
  *
- * Os caminhos e nomes de campos vêm da configuração (config.js) porque precisam
- * ser conferidos na documentação do SGA do cliente. Use "npm run testar-hinova".
+ * REFERÊNCIA OBRIGATÓRIA: docs/api/hinova-sga-api-v2.md. Toda chamada nova ou alterada
+ * deve seguir esse documento (caminhos, parâmetros, formatos, limites e regras de segurança).
+ * Caminhos e nomes de campos ficam em config.js; "npm run testar-hinova" confere na prática.
  *
  * Placa e CPF chegam aqui já validados (validar.js) e entram codificados no
  * caminho (encodeURIComponent), nunca como texto livre.
@@ -139,16 +140,39 @@ export function criarHinova(cfg, { fetchImpl = fetch, agora = Date.now } = {}) {
   }
 
   // Chamada autenticada (GET ou POST), com nova tentativa se o token de usuário expirou
+  // Documentação, seção 6: nova tentativa SÓ em GET de leitura e só em erro de rede ou 5xx,
+  // com espera crescente (máx. cfg.tentativasGet). POST nunca é repetido automaticamente.
+  async function chamarComTentativas(metodo, caminho, opcoes) {
+    const max = metodo === "GET" ? Math.max(1, cfg.tentativasGet) : 1;
+    for (let tentativa = 1; ; tentativa++) {
+      try {
+        const resp = await chamar(metodo, caminho, opcoes);
+        if (resp.status < 500 || tentativa >= max) return resp;
+      } catch (e) {
+        if (tentativa >= max) throw e;
+      }
+      await new Promise((r) => setTimeout(r, 300 * 2 ** (tentativa - 1) + Math.random() * 200));
+    }
+  }
+
   async function requisitar(metodo, caminho, body) {
     let auth = await autenticar();
-    let resp = await chamar(metodo, caminho, { auth, body });
+    let resp = await chamarComTentativas(metodo, caminho, { auth, body });
     if (resp.status === 401 && cfg.modoAuth === "usuario") {
       auth = await autenticar(true);
-      resp = await chamar(metodo, caminho, { auth, body });
+      resp = await chamarComTentativas(metodo, caminho, { auth, body });
     }
     const rota = caminho.split("/").slice(0, 3).join("/");
-    // A Hinova responde 404 ou 406 quando não encontra o registro
-    if (resp.status === 404 || resp.status === 406) return { status: resp.status, dados: null };
+    // 404 = não encontrado. 406 é o formato de erro da API ({ mensagem, error: [...] }, documentação
+    // seção 3): só conta como "não encontrado" quando a própria mensagem diz isso; senão é erro.
+    if (resp.status === 404) return { status: 404, dados: null };
+    if (resp.status === 406) {
+      const textoErro = JSON.stringify(resp.dados || "");
+      if (/n[ãa]o\s+(foi\s+)?encontrad|nenhum|sem\s+registro/i.test(textoErro)) return { status: 406, dados: null };
+      const erro = new Error(`Hinova: erro HTTP 406 em ${rota}`);
+      erro.diagnostico = diagnosticar(406, resp.dados);
+      throw erro;
+    }
     if (resp.status >= 400) {
       const erro = new Error(`Hinova: erro HTTP ${resp.status} em ${rota}`);
       erro.diagnostico = diagnosticar(resp.status, resp.dados);
@@ -210,7 +234,7 @@ export function criarHinova(cfg, { fetchImpl = fetch, agora = Date.now } = {}) {
       const codigo = pegar(b, cfg.campos.codigoBoleto);
       const incompleto = !linhaDigitavel(pegar(b, cfg.campos.linhaDigitavel)) || !pixDoCampo(b, cfg.campos.pix).pix;
       if (incompleto && codigo && cfg.pathBoletoDetalhe) {
-        const { dados } = await get(preencher(cfg.pathBoletoDetalhe, { ...valores, codigo_boleto: codigo }));
+        const { dados } = await get(preencher(cfg.pathBoletoDetalhe, { ...valores, nosso_numero: codigo }));
         const detalhe = comoLista(dados)[0];
         if (detalhe && typeof detalhe === "object") b = { ...b, ...detalhe };
       }

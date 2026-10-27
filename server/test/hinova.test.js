@@ -455,3 +455,54 @@ test("valor do boleto: \"55.00\" da Hinova vira R$ 55,00; inválido é omitido",
   assert.match(texto, /💰 \*Valor:\* R\$ 55,00/);
   assert.ok(!montarMensagem({ vencimento: "2026-11-05", valor: { x: 1 }, linhaDigitavel: LINHA }, "Integra").includes("Valor"), "valor inválido não entra");
 });
+
+// ---- Conformidade com docs/api/hinova-sga-api-v2.md ----
+
+test("doc §3: 406 só é 'não encontrado' se a mensagem disser; outro 406 é erro", async () => {
+  const resp406 = (corpo) => async () => ({ status: 406, text: async () => JSON.stringify(corpo) });
+  const naoAchou = criarHinova(lerConfig({ HINOVA_TOKEN: "t" }).hinova, { fetchImpl: resp406({ mensagem: "Nenhum boleto encontrado", error: [] }) });
+  assert.equal((await naoAchou.consultar({ placa: "PGN3D63", cpf: "52998224725" })).resultado, "sem_boleto_no_periodo");
+  const erro = criarHinova(lerConfig({ HINOVA_TOKEN: "t" }).hinova, { fetchImpl: resp406({ mensagem: "Erro", error: ["Intervalo de datas inválido"] }) });
+  await assert.rejects(erro.consultar({ placa: "PGN3D63", cpf: "52998224725" }), (e) => {
+    assert.match(e.message, /406/);
+    assert.deepEqual(e.diagnostico.mensagens, ["mensagem: Erro", "error[0]: Intervalo de datas inválido"]);
+    return true;
+  });
+});
+
+test("doc §6: GET de leitura tenta de novo em 5xx; POST nunca é repetido", async () => {
+  let gets = 0, posts = 0;
+  const fetchImpl = async (url, opt) => {
+    if (opt.method === "POST") { posts++; return { status: 503, text: async () => "{}" }; }
+    gets++;
+    return gets < 3 ? { status: 502, text: async () => "{}" } : { status: 200, text: async () => JSON.stringify({ placa: "PGN3D63" }) };
+  };
+  const h = criarHinova(lerConfig({ HINOVA_TOKEN: "t" }).hinova, { fetchImpl });
+  assert.equal((await h.buscarVeiculo("PGN3D63")).placa, "PGN3D63");
+  assert.equal(gets, 3);
+  await assert.rejects(h.listarBoletos({ placa: "PGN3D63" }), /503/);
+  assert.equal(posts, 1, "POST não pode ser repetido automaticamente");
+});
+
+test("doc §3: período de boletos limitado a 90 dias", async () => {
+  const { conferirConfig } = await import("../lib/config.js");
+  const base = { TURNSTILE_SECRET: "s", ALLOWED_ORIGINS: "https://a", MODO: "simulado" };
+  assert.deepEqual(conferirConfig(lerConfig(base)), []);
+  assert.ok(conferirConfig(lerConfig({ ...base, HINOVA_BOLETO_DIAS_ANTES: "80", HINOVA_BOLETO_DIAS_DEPOIS: "30" })).some((f) => /90 dias/.test(f)));
+});
+
+test("doc §1: detalhe do boleto é GET /buscar/boleto/:nosso_numero", () => {
+  const c = lerConfig({}).hinova;
+  assert.equal(c.pathBoletoDetalhe, "/buscar/boleto/{nosso_numero}");
+  assert.deepEqual(c.campos.codigoBoleto, ["nosso_numero"]);
+});
+
+test("doc §0: aceita HINOVA_TOKEN_SGA e HINOVA_TOKEN_USUARIO (e o legado HINOVA_TOKEN)", () => {
+  const usuarioPronto = lerConfig({ HINOVA_TOKEN_USUARIO: "hash-usuario" }).hinova;
+  assert.equal(usuarioPronto.token, "hash-usuario");
+  assert.equal(usuarioPronto.modoAuth, "token");
+  const sga = lerConfig({ HINOVA_TOKEN_SGA: "token-sga", HINOVA_USUARIO: "u", HINOVA_SENHA: "s" }).hinova;
+  assert.equal(sga.token, "token-sga");
+  assert.equal(sga.modoAuth, "usuario");
+  assert.equal(lerConfig({ HINOVA_TOKEN: "legado" }).hinova.token, "legado");
+});

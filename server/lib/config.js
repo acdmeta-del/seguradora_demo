@@ -39,15 +39,17 @@ export function lerConfig(env = process.env) {
 
     hinova: {
       baseUrl: (env.HINOVA_BASE_URL || "https://api.hinova.com.br/api/sga/v2").replace(/\/+$/, ""),
-      token: credencial(env.HINOVA_TOKEN),
+      // Documentação (docs/api/hinova-sga-api-v2.md, seções 0 e 1): HINOVA_TOKEN_SGA (token do painel,
+      // só para /usuario/autenticar) ou HINOVA_TOKEN_USUARIO (token_usuario pronto). HINOVA_TOKEN = legado.
+      token: credencial(env.HINOVA_TOKEN_USUARIO || env.HINOVA_TOKEN_SGA || env.HINOVA_TOKEN),
       usuario: String(env.HINOVA_USUARIO || "").trim(),
       senha: env.HINOVA_SENHA || "",
       // token   → o token da associação vai direto no Authorization (como no n8n)
       // usuario → troca token + usuário/senha por um token_usuario (/usuario/autenticar)
       // Padrão: "usuario" se HINOVA_USUARIO e HINOVA_SENHA estiverem preenchidos; senão "token"
-      modoAuth: env.HINOVA_AUTH || (env.HINOVA_USUARIO && env.HINOVA_SENHA ? "usuario" : "token"),
+      modoAuth: env.HINOVA_AUTH || (env.HINOVA_TOKEN_USUARIO ? "token" : env.HINOVA_USUARIO && env.HINOVA_SENHA ? "usuario" : "token"),
       // CONFIRMAR na documentação/coleção Postman do SGA v2 do cliente.
-      // Marcadores aceitos: {placa} {cpf} {codigo_veiculo} {codigo_associado} {codigo_boleto}
+      // Marcadores aceitos: {placa} {cpf} {codigo_veiculo} {codigo_associado} {nosso_numero}
       pathAutenticar: env.HINOVA_PATH_AUTENTICAR || "/usuario/autenticar",
       // Vazio = não consulta o veículo; CPF e telefone saem da lista de boletos
       pathVeiculo: env.HINOVA_PATH_VEICULO ?? "/veiculo/buscar/{placa}",
@@ -57,7 +59,7 @@ export function lerConfig(env = process.env) {
       boletoDiasAntes: num(env.HINOVA_BOLETO_DIAS_ANTES, 60),   // vencidos há até N dias
       boletoDiasDepois: num(env.HINOVA_BOLETO_DIAS_DEPOIS, 30), // vencendo nos próximos N dias
       // Detalhe de um boleto pelo número (marcador {codigo_boleto})
-      pathBoletoDetalhe: env.HINOVA_PATH_BOLETO_DETALHE ?? "/buscar/boleto/{codigo_boleto}",
+      pathBoletoDetalhe: env.HINOVA_PATH_BOLETO_DETALHE ?? "/buscar/boleto/{nosso_numero}",
       // Opcional: busca o associado quando o veículo não traz CPF/telefone do titular
       pathAssociado: env.HINOVA_PATH_ASSOCIADO || "",
       // Nomes EXATOS dos campos nas respostas (lista separada por vírgula, aceita "a.b").
@@ -79,12 +81,13 @@ export function lerConfig(env = process.env) {
         pix: lista(env.HINOVA_CAMPO_PIX || "pix.copia_cola"),            // texto; "pix.qrcode" é a imagem
         situacao: lista(env.HINOVA_CAMPO_SITUACAO || "descricao_situacao_boleto,situacao_boleto"),
         dataPagamento: lista(env.HINOVA_CAMPO_DATA_PAGAMENTO || "data_pagamento"),   // preenchido = pago
-        codigoBoleto: lista(env.HINOVA_CAMPO_CODIGO_BOLETO || "nosso_numero,codigo_boleto,numero_boleto")
+        codigoBoleto: lista(env.HINOVA_CAMPO_CODIGO_BOLETO || "nosso_numero")  // GET /buscar/boleto/:nosso_numero
       },
       // Situações que NÃO são boleto em aberto (comparação sem acento, maiúsculas)
       // Boleto só conta como aberto se a situação estiver NESTA lista (sem situação = não envia)
       situacoesAbertas: lista(env.HINOVA_SITUACOES_ABERTAS || "ABERTO,EM ABERTO"),
-      timeoutMs: num(env.HINOVA_TIMEOUT_MS, 8000)
+      timeoutMs: num(env.HINOVA_TIMEOUT_MS, 30000),   // documentação, seção 6: listas podem demorar
+      tentativasGet: num(env.HINOVA_TENTATIVAS_GET, 3) // seção 6: retry só em GET de leitura (rede/5xx)
     },
 
     whatsapp: {
@@ -114,6 +117,10 @@ export function conferirConfig(cfg) {
     if (cfg.hinova.modoAuth === "usuario" && !cfg.hinova.senha) faltando.push("HINOVA_SENHA");
   }
   if (cfg.modo === "homologacao" && !cfg.whatsapp.permitidosTeste.length) faltando.push("WHATSAPP_TESTE_PERMITIDOS");
+  // Documentação, seção 3: POST /listar/boleto-associado-veiculo aceita intervalo de até 90 dias
+  if (cfg.hinova.boletoDiasAntes < 0 || cfg.hinova.boletoDiasDepois < 0 || cfg.hinova.boletoDiasAntes + cfg.hinova.boletoDiasDepois > 90) {
+    faltando.push("HINOVA_BOLETO_DIAS_ANTES + HINOVA_BOLETO_DIAS_DEPOIS (máximo 90 dias, conforme a API)");
+  }
   const w = cfg.whatsapp;
   if (!["log", "evolution", "zapi"].includes(w.provedor)) faltando.push("WHATSAPP_PROVIDER (log|evolution|zapi)");
   if (w.provedor === "zapi") {
