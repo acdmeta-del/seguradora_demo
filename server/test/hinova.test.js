@@ -204,7 +204,7 @@ test("boletos: busca o detalhe (/buscar/boleto/{número}) quando falta linha dig
     return { status: 200, text: async () => JSON.stringify([{ nosso_numero: 380977, data_vencimento: "10/11/2026", descricao_situacao_boleto: "ABERTO" }]) };
   };
   const b = await criarHinova(lerConfig({ HINOVA_TOKEN: "t" }).hinova, { fetchImpl }).buscarBoletoAberto({ placa: "PGN3D63" });
-  assert.deepEqual(b, { vencimento: "10/11/2026", linhaDigitavel: LINHA, link: "https://b/", pix: PIX, alertas: [] });
+  assert.deepEqual(b, { vencimento: "10/11/2026", valor: null, linhaDigitavel: LINHA, link: "https://b/", pix: PIX, alertas: [] });
   assert.deepEqual(urls, ["POST /listar/boleto-associado-veiculo", "GET /buscar/boleto/380977"]);
 });
 
@@ -389,7 +389,7 @@ test("resposta real de /listar/boleto-associado-veiculo (anonimizada): PIX, data
   const r = await criarHinova(lerConfig({ HINOVA_TOKEN: "t" }).hinova, { fetchImpl }).consultar({ placa: "PGN3D63", cpf: "52998224725" });
   assert.equal(r.resultado, "ok");
   assert.equal(r.telefone, "5587999999999");
-  assert.deepEqual(r.boleto, { vencimento: "05/11/2026", linhaDigitavel: LINHA, link: "https://short.hinova.com.br/v2/GyFl7YRm.pdf", pix: PIX_REAL, alertas: [] });
+  assert.deepEqual(r.boleto, { vencimento: "05/11/2026", valor: "R$ 55,00", linhaDigitavel: LINHA, link: "https://short.hinova.com.br/v2/GyFl7YRm.pdf", pix: PIX_REAL, alertas: [] });
   assert.deepEqual(urls, ["POST /listar/boleto-associado-veiculo", "GET /veiculo/buscar/PGN3D63"], "lista já traz linha e PIX: sem chamada de detalhe");
   const texto = montarMensagem(r.boleto, "Integra Proteção Veicular");
   assert.ok(!texto.includes("[object"));
@@ -441,4 +441,17 @@ test("telefone do veículo em campos separados (ddd_celular + telefone_celular)"
   const h = criarHinova(lerConfig({ HINOVA_TOKEN: "t" }).hinova, { fetchImpl: async () => ({ status: 404, text: async () => "{}" }) });
   assert.equal(h.titularDe({ cpf: "52998224725", ddd_celular: "87", telefone_celular: "999999999" }).telefone, "5587999999999");
   assert.equal(h.titularDe({ cpf: "52998224725", ddd_celular: null, telefone_celular: "999999999" }).telefone, "", "sem DDD não dá para enviar");
+});
+
+test("valor do boleto: \"55.00\" da Hinova vira R$ 55,00; inválido é omitido", async () => {
+  const { formatarValor } = await import("../lib/formatar.js");
+  assert.equal(formatarValor("55.00"), "R$ 55,00");
+  assert.equal(formatarValor("1234.50"), "R$ 1.234,50");
+  assert.equal(formatarValor("55,00"), "R$ 55,00");
+  assert.equal(formatarValor("1.234,56"), "R$ 1.234,56");
+  assert.equal(formatarValor(55), "R$ 55,00");
+  for (const v of ["0.00", "-5", "abc", { valor: 55 }, null, "", "55.000", "1234.5", "55,0"]) assert.equal(formatarValor(v), null, JSON.stringify(v));
+  const texto = montarMensagem({ vencimento: "2026-11-05", valor: "55.00", linhaDigitavel: LINHA }, "Integra");
+  assert.match(texto, /💰 \*Valor:\* R\$ 55,00/);
+  assert.ok(!montarMensagem({ vencimento: "2026-11-05", valor: { x: 1 }, linhaDigitavel: LINHA }, "Integra").includes("Valor"), "valor inválido não entra");
 });

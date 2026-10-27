@@ -73,6 +73,7 @@ export function lerConfig(env = process.env) {
         codigoVeiculo: lista(env.HINOVA_CAMPO_CODIGO_VEICULO || "codigo_veiculo"),
         codigoAssociado: lista(env.HINOVA_CAMPO_CODIGO_ASSOCIADO || "codigo_associado,associado.codigo_associado"),
         vencimento: lista(env.HINOVA_CAMPO_VENCIMENTO || "data_vencimento,vencimento"),
+        valor: lista(env.HINOVA_CAMPO_VALOR || "valor_boleto"),
         linhaDigitavel: lista(env.HINOVA_CAMPO_LINHA || "linha_digitavel"),
         link: lista(env.HINOVA_CAMPO_LINK || "link_boleto,url_boleto,link"),
         pix: lista(env.HINOVA_CAMPO_PIX || "pix.copia_cola"),            // texto; "pix.qrcode" é a imagem

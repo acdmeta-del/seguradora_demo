@@ -22,6 +22,21 @@ export function formatarData(v) {
   return null;
 }
 
+// Valor em reais: "55.00" (como vem da Hinova), "55,00", "1.234,56", "55" ou 55 → "R$ 55,00".
+// Só formatos sem ambiguidade ("55.000" pode ser 55 ou 55 mil: recusado) e maiores que zero;
+// qualquer outra coisa → null (a linha do valor é omitida).
+export function formatarValor(v) {
+  let n = null;
+  if (typeof v === "number" && Number.isFinite(v)) n = v;
+  const s = comoTexto(v);
+  if (n === null && s) {
+    if (/^\d+(\.\d{2})?$/.test(s)) n = Number(s);                                       // 55.00 ou 55
+    else if (/^(\d{1,3}(\.\d{3})+|\d+),\d{2}$/.test(s)) n = Number(s.replace(/\./g, "").replace(",", ".")); // 1.234,56 ou 55,00
+  }
+  if (n === null || !(n > 0) || n > 1e7) return null;
+  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(n).replace(/\u00a0/g, " ");
+}
+
 // Linha digitável: boleto bancário (47 dígitos) ou de arrecadação (48)
 export function linhaDigitavel(v) {
   const s = comoTexto(v);

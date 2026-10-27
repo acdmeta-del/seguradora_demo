@@ -18,7 +18,7 @@
  * caminho (encodeURIComponent), nunca como texto livre.
  */
 import { extrairTelefone } from "./whatsapp.js";
-import { formatarData, linhaDigitavel, linkSeguro, pixDoCampo } from "./formatar.js";
+import { formatarData, formatarValor, linhaDigitavel, linkSeguro, pixDoCampo } from "./formatar.js";
 // Lê o primeiro campo existente de uma lista ("a", "a.b")
 export function pegar(obj, caminhos) {
   const ler = (c) => c.split(".").reduce((o, k) => (o == null ? undefined : o[k]), obj);
@@ -223,6 +223,7 @@ export function criarHinova(cfg, { fetchImpl = fetch, agora = Date.now } = {}) {
       if (!pix.presente) alertas.push(`campo de PIX (${cfg.campos.pix.join(" | ")}) não veio na resposta; enviado sem PIX`);
       return {
         vencimento: formatarData(pegar(b, cfg.campos.vencimento)),
+        valor: formatarValor(pegar(b, cfg.campos.valor)),
         linhaDigitavel: linha,
         link: linkSeguro(pegar(b, cfg.campos.link)),
         pix: pix.pix,

@@ -7,7 +7,7 @@
  *               cabeçalho Client-Token = token de segurança da conta)
  */
 import { mascararTelefone } from "./validar.js";
-import { comoTexto, formatarData, linhaDigitavel, linkSeguro, pixValido } from "./formatar.js";
+import { comoTexto, formatarData, formatarValor, linhaDigitavel, linkSeguro, pixValido } from "./formatar.js";
 
 // Celular brasileiro → formato internacional só com dígitos (55 + DDD + número)
 export function normalizarTelefone(tel) {
@@ -43,6 +43,7 @@ export function mesmoTelefone(a, b) {
 // escolher "Copiar" para levar só o código. Formatação do WhatsApp: *negrito*, ```monoespaçado```.
 export function montarMensagens(boleto, nomeEmpresa) {
   const vencimento = formatarData(boleto.vencimento);
+  const valor = formatarValor(boleto.valor);
   const linha = linhaDigitavel(boleto.linhaDigitavel);
   const pix = pixValido(boleto.pix);
   const link = linkSeguro(boleto.link);
@@ -50,6 +51,7 @@ export function montarMensagens(boleto, nomeEmpresa) {
 
   const partes = [`Olá! Aqui é a *${empresa}*.\nSegue a 2ª via do seu boleto.`];
   if (vencimento) partes.push(`📅 *Vencimento:* ${vencimento}`);
+  if (valor) partes.push(`💰 *Valor:* ${valor}`);
   if (pix) partes.push("💠 *Pague com PIX:* o código *copia e cola* está na próxima mensagem. Toque e segure sobre ela e escolha *Copiar*.");
   if (linha) partes.push(`🧾 *Linha digitável:*\n\`\`\`${linha}\`\`\``);
   if (link) partes.push(`📄 *Boleto em PDF:*\n${link}`);
