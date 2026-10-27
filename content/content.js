@@ -160,13 +160,14 @@ window.SITE_CONTENT = {
   // Pop-up "2ª via de boleto" (consulta ao SGA pelo intermediário em server/)
   boleto: {
     titulo: "2ª via de boleto",
-    texto: "Informe a placa do veículo e o CPF do titular. Se os dados estiverem corretos, enviamos a 2ª via para o WhatsApp cadastrado.",
-    campos: { placa: "Placa do veículo", cpf: "CPF do titular" },
+    texto: "Informe o CPF do titular. Se os dados estiverem corretos, enviamos a 2ª via para o WhatsApp cadastrado.",
+    campos: { placa: "Placa do veículo (opcional)", cpf: "CPF do titular" },
+    dicaPlaca: "Com a placa, enviamos só o boleto desse veículo. Sem a placa, enviamos os boletos em aberto de todos os veículos do CPF.",
     botao: "Enviar 2ª via",
     enviando: "Consultando...",
-    aviso: "Usamos placa e CPF apenas para localizar seu boleto. Nada fica salvo neste site.",
+    aviso: "Usamos CPF e placa apenas para localizar seu boleto. Nada fica salvo neste site e nenhum dado aparece aqui.",
     erros: {
-      placa: "Informe uma placa válida (ex.: ABC1D23).",
+      placa: "Informe uma placa válida (ex.: ABC1D23) ou deixe o campo em branco.",
       cpf: "Informe um CPF válido.",
       humano: "Confirme que você não é um robô e tente de novo.",
       limite: "Muitas tentativas. Aguarde alguns minutos e tente de novo.",

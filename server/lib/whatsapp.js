@@ -7,7 +7,7 @@
  *               cabeçalho Client-Token = token de segurança da conta)
  */
 import { mascararTelefone } from "./validar.js";
-import { comoTexto, formatarData, formatarValor, linhaDigitavel, linkSeguro, pixValido } from "./formatar.js";
+import { comoTexto, formatarData, formatarValor, linhaDigitavel, linkSeguro, pixValido, rotuloVeiculo } from "./formatar.js";
 
 // Celular brasileiro → formato internacional só com dígitos (55 + DDD + número)
 export function normalizarTelefone(tel) {
@@ -41,25 +41,40 @@ export function mesmoTelefone(a, b) {
 // valida de novo aqui para que nenhum chamador consiga colocar um objeto ou lixo na mensagem.
 // O PIX vai SOZINHO numa segunda mensagem: no WhatsApp, basta tocar e segurar sobre ela e
 // escolher "Copiar" para levar só o código. Formatação do WhatsApp: *negrito*, ```monoespaçado```.
-export function montarMensagens(boleto, nomeEmpresa) {
+// Com { indice, total } (busca só por CPF, vários boletos), o cabeçalho vira "Boleto i de N".
+export function montarMensagens(boleto, nomeEmpresa, { indice = 1, total = 1 } = {}) {
   const vencimento = formatarData(boleto.vencimento);
   const valor = formatarValor(boleto.valor);
   const linha = linhaDigitavel(boleto.linhaDigitavel);
   const pix = pixValido(boleto.pix);
   const link = linkSeguro(boleto.link);
+  const veiculos = (Array.isArray(boleto.veiculos) ? boleto.veiculos : []).map(rotuloVeiculo).filter(Boolean).slice(0, 5);
   const empresa = comoTexto(nomeEmpresa) || "associação";
+  const varios = total > 1;
 
-  const partes = [`Olá! Aqui é a *${empresa}*.\nSegue a 2ª via do seu boleto.`];
+  const partes = [varios ? `🧾 *Boleto ${indice} de ${total}*` : `Olá! Aqui é a *${empresa}*.\nSegue a 2ª via do seu boleto.`];
+  if (veiculos.length) partes.push(`🚗 *${veiculos.length > 1 ? "Veículos" : "Veículo"}:* ${veiculos.join("; ")}`);
   if (vencimento) partes.push(`📅 *Vencimento:* ${vencimento}`);
   if (valor) partes.push(`💰 *Valor:* ${valor}`);
   if (pix) partes.push("💠 *Pague com PIX:* o código *copia e cola* está na próxima mensagem. Toque e segure sobre ela e escolha *Copiar*.");
   if (linha) partes.push(`🧾 *Linha digitável:*\n\`\`\`${linha}\`\`\``);
   if (link) partes.push(`📄 *Boleto em PDF:*\n${link}`);
-  partes.push("_Se você não pediu esta mensagem, pode ignorá-la._");
+  if (!varios) partes.push("_Se você não pediu esta mensagem, pode ignorá-la._");
 
   const mensagens = [partes.join("\n\n")];
   if (pix) mensagens.push(pix); // só o código, sem nenhum texto junto
   return mensagens;
+}
+
+// Vários boletos (busca só por CPF): uma apresentação e, para cada boleto, o resumo
+// seguido do seu PIX sozinho. Com um boleto só, fica igual à busca por placa.
+export function montarMensagensVarios(boletos, nomeEmpresa) {
+  const lista = (Array.isArray(boletos) ? boletos : []).filter(Boolean);
+  if (lista.length <= 1) return lista.length ? montarMensagens(lista[0], nomeEmpresa) : [];
+  const empresa = comoTexto(nomeEmpresa) || "associação";
+  const apresentacao = `Olá! Aqui é a *${empresa}*.\nEncontramos *${lista.length} boletos em aberto* no seu cadastro. ` +
+    "Seguem as 2ª vias, uma de cada vez, cada uma com o seu PIX logo depois.\n\n_Se você não pediu esta mensagem, pode ignorá-la._";
+  return [apresentacao, ...lista.flatMap((b, i) => montarMensagens(b, nomeEmpresa, { indice: i + 1, total: lista.length }))];
 }
 
 // Versão em texto único (diagnóstico e testes)

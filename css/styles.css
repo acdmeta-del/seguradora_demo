@@ -642,6 +642,7 @@ button.hero__tile { width: 100%; border: 0; font-family: inherit; cursor: pointe
 .boleto-form__acoes { display: flex; flex-wrap: wrap; gap: var(--space-3); margin-top: var(--space-4); }
 .boleto-form__acoes .btn { flex: 1 1 160px; }
 .boleto-form__aviso { margin: var(--space-4) 0 0; font-size: var(--fs-sm); }
+.field__dica { margin: var(--space-1) 0 0; font-size: var(--fs-sm); color: var(--color-text); }
 .boleto-form[aria-busy="true"] .btn--primary { opacity: .7; cursor: progress; }
 
 /* ==========================================================================

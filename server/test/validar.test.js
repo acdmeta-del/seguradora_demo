@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { normalizarPlaca, normalizarCpf, validarPedido, mascararCpf, mascararTelefone } from "../lib/validar.js";
+import { normalizarPlaca, normalizarCpf, validarPedido, mascararCpf, mascararTelefone, mascararPlaca, finalPlaca } from "../lib/validar.js";
 
 test("placa: aceita antiga e Mercosul, com ou sem hífen e minúsculas", () => {
   assert.equal(normalizarPlaca("ABC1234"), "ABC1234");
@@ -33,7 +33,19 @@ test("pedido: exige os três campos e recusa campos extras", () => {
   assert.equal(validarPedido({ placa: "ABC1D23", cpf: "529.982.247-25", token: "x".repeat(2049) }).erro, "token");
 });
 
+test("pedido sem placa: busca só por CPF; placa preenchida continua validada", () => {
+  assert.deepEqual(validarPedido({ cpf: "529.982.247-25", token: "t" }), { placa: null, cpf: "52998224725", token: "t" });
+  assert.deepEqual(validarPedido({ placa: "", cpf: "529.982.247-25", token: "t" }), { placa: null, cpf: "52998224725", token: "t" });
+  for (const placa of ["   ", "ABC", 0, false, [], { $ne: null }, "ABC1D23' OR '1'='1"]) {
+    assert.equal(validarPedido({ placa, cpf: "529.982.247-25", token: "t" }).erro, "placa", JSON.stringify(placa));
+  }
+  assert.equal(validarPedido({ token: "t" }).erro, "cpf", "CPF continua obrigatório");
+});
+
 test("máscaras não expõem CPF nem telefone completos", () => {
   assert.equal(mascararCpf("52998224725"), "***.***.*47-25");
   assert.equal(mascararTelefone("5511987654321"), "(**) *****-4321");
+  assert.equal(mascararPlaca("ABC1D23"), "ABC****");
+  assert.equal(mascararPlaca(null), "(só CPF)");
+  assert.equal(finalPlaca("abc-1d23"), "1D23");
 });

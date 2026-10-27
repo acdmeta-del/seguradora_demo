@@ -39,11 +39,14 @@ export function validarPedido(body) {
   if (!body || typeof body !== "object" || Array.isArray(body)) return { erro: "corpo" };
   if (Object.keys(body).some((k) => !CAMPOS_PERMITIDOS.has(k))) return { erro: "campos" };
 
-  const placa = normalizarPlaca(body.placa);
+  // Placa é opcional: sem placa, a busca é por CPF (todos os veículos do titular).
+  // Se vier preenchida, precisa ser uma placa válida.
+  const semPlaca = body.placa === undefined || body.placa === null || body.placa === "";
+  const placa = semPlaca ? null : normalizarPlaca(body.placa);
   const cpf = normalizarCpf(body.cpf);
   const token = typeof body.token === "string" && body.token.length > 0 && body.token.length <= 2048 ? body.token : null;
 
-  if (!placa) return { erro: "placa" };
+  if (!semPlaca && !placa) return { erro: "placa" };
   if (!cpf) return { erro: "cpf" };
   if (!token) return { erro: "token" };
   return { placa, cpf, token };
@@ -52,4 +55,6 @@ export function validarPedido(body) {
 /* Máscaras para registros (logs): nunca gravar CPF ou telefone completos */
 export const mascararCpf = (cpf) => `***.***.*${String(cpf).slice(7, 9)}-${String(cpf).slice(9, 11)}`;
 export const mascararTelefone = (tel) => `(**) *****-${String(tel).replace(/\D/g, "").slice(-4)}`;
-export const mascararPlaca = (placa) => `${String(placa).slice(0, 3)}****`;
+export const mascararPlaca = (placa) => (placa ? `${String(placa).slice(0, 3)}****` : "(só CPF)");
+// Final da placa para identificar o veículo na mensagem ao próprio associado: "3D63"
+export const finalPlaca = (placa) => String(placa || "").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(-4);

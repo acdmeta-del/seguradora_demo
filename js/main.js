@@ -329,7 +329,7 @@
     dialog.addEventListener("abrir", () => {
       limpar();
       carregarTurnstile();
-      placa.focus();
+      cpf.focus();
     });
 
     form.addEventListener("submit", async (e) => {
@@ -337,8 +337,9 @@
       limpar();
       const p = placa.value.trim();
       const c = digits(cpf.value);
-      if (!PLACA_RE.test(p)) return falhar(B.erros.placa, placa);
+      // CPF obrigatório; placa opcional (em branco = todos os veículos do CPF)
       if (!cpfValido(c)) return falhar(B.erros.cpf, cpf);
+      if (p && !PLACA_RE.test(p)) return falhar(B.erros.placa, placa);
       if (usarServidor && !token) return falhar(B.erros.humano);
 
       botao.disabled = true;
@@ -352,7 +353,7 @@
           const r = await fetch(B.endpoint, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ placa: p, cpf: c, token }),
+            body: JSON.stringify(p ? { placa: p, cpf: c, token } : { cpf: c, token }),
             credentials: "omit"
           });
           const dados = await r.json().catch(() => ({}));

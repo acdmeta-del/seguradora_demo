@@ -21,6 +21,15 @@ async function subir(env = {}, { humano = true } = {}) {
   const hinova = {
     async consultar({ placa, cpf }) {
       chamadas.hinova++;
+      if (placa === null && cpf === CPF_TITULAR) {
+        // Só CPF: dois veículos, um boleto em aberto para cada
+        const linha = "34191.79001 01043.510047 91020.150008 1 99990000010000";
+        const boletos = [
+          { vencimento: "05/10/2026", linhaDigitavel: linha, pix: env.PIX_HINOVA, veiculos: ["CG 150 FAN · placa final 3D63"] },
+          { vencimento: "05/11/2026", linhaDigitavel: linha, pix: env.PIX_HINOVA, veiculos: ["ONIX · placa final 4R56"] }
+        ];
+        return { resultado: "ok", telefone: TELEFONE, boleto: boletos[0], boletos };
+      }
       if (placa !== "ABC1D23") return { resultado: "veiculo_nao_encontrado" };
       if (cpf !== CPF_TITULAR) return { resultado: "cpf_nao_confere" };
       return { resultado: "ok", telefone: env.TELEFONE_HINOVA || TELEFONE, boleto: { vencimento: "10/11/2026", linhaDigitavel: "34191.79001 01043.510047 91020.150008 1 99990000010000", link: "https://exemplo/boleto", pix: env.PIX_HINOVA } };
@@ -191,4 +200,27 @@ test("com PIX: envia o resumo e depois o código PIX sozinho, nessa ordem", asyn
   assert.equal(s.chamadas.enviados.length, 2);
   assert.match(s.chamadas.enviados[0].texto, /próxima mensagem/);
   assert.equal(s.chamadas.enviados[1].texto, PIX);
+});
+
+test("só CPF (placa em branco): envia todos os boletos ao WhatsApp cadastrado, resposta igual", async (t) => {
+  const PIX = "00020126580014br.gov.bcb.pix0136123e4567-e12b-12d1-a456-4266554400005204000053039865802BR5913Fulano de Tal6008BRASILIA62070503***63041D3D";
+  const s = await subir({ PIX_HINOVA: PIX, WHATSAPP_INTERVALO_MS: "5" }); t.after(s.fim);
+  const comPlaca = await s.post(valido);
+  await s.app.locals.ultimoProcesso;
+  const semPlaca = await s.post({ placa: "", cpf: valido.cpf, token: "tok" });
+  assert.equal(semPlaca.status, 200);
+  assert.equal(semPlaca.texto, comPlaca.texto, "resposta genérica, sem nenhum dado");
+  assert.equal(await s.app.locals.ultimoProcesso, "enviado");
+  const msgs = s.chamadas.enviados.slice(2).map((e) => e.texto);
+  assert.equal(msgs.length, 5);
+  assert.match(msgs[0], /2 boletos em aberto/);
+  assert.match(msgs[1], /Boleto 1 de 2[\s\S]*placa final 3D63/);
+  assert.equal(msgs[2], PIX);
+  assert.match(msgs[3], /Boleto 2 de 2[\s\S]*placa final 4R56/);
+  assert.equal(msgs[4], PIX);
+  assert.ok(s.chamadas.enviados.every((e) => e.tel === TELEFONE));
+
+  const outro = await s.post({ cpf: "111.444.777-35", token: "tok" });
+  assert.equal(outro.texto, comPlaca.texto);
+  assert.equal(await s.app.locals.ultimoProcesso, "veiculo_nao_encontrado");
 });

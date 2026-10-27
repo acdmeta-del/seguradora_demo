@@ -2,7 +2,7 @@
  * POST /api/boleto: 2ª via de boleto, com proteções em camadas, nesta ordem:
  *   1. Origem permitida (CORS + conferência do cabeçalho Origin)
  *   2. Limite de requisições por IP e teto global
- *   3. Validação estrita de placa e CPF (lista de permissão)
+ *   3. Validação estrita de CPF e da placa, se informada (lista de permissão)
  *   4. Turnstile verificado no servidor
  *   5. Limite de envios por CPF por dia
  *   6. Consulta à Hinova e envio ao WhatsApp CADASTRADO, em segundo plano
@@ -17,7 +17,7 @@ import rateLimit from "express-rate-limit";
 import { validarPedido, mascararCpf, mascararPlaca, mascararTelefone } from "./lib/validar.js";
 import { normalizarOrigem } from "./lib/config.js";
 import { verificarTurnstile } from "./lib/turnstile.js";
-import { montarMensagens, mesmoTelefone } from "./lib/whatsapp.js";
+import { montarMensagensVarios, mesmoTelefone } from "./lib/whatsapp.js";
 
 export const MENSAGEM_PADRAO =
   "Se os dados estiverem corretos e houver boleto em aberto, enviaremos a 2ª via para o WhatsApp cadastrado em instantes.";
@@ -95,14 +95,16 @@ export function criarApp(cfg, deps) {
         return "bloqueado_homologacao";
       }
     }
-    for (const a of r.boleto.alertas || []) log.info(`[boleto] alerta: ${a}: ${ref}`);
+    // Placa + CPF: um boleto. Só CPF: todos os boletos em aberto do titular (até HINOVA_MAX_BOLETOS_CPF)
+    const boletos = r.boletos?.length ? r.boletos : [r.boleto];
+    for (const b of boletos) for (const a of b.alertas || []) log.info(`[boleto] alerta: ${a}: ${ref}`);
     // Resumo primeiro e o PIX sozinho depois, com uma pausa curta para manter a ordem no WhatsApp
-    const mensagens = montarMensagens(r.boleto, cfg.whatsapp.nomeEmpresa);
+    const mensagens = montarMensagensVarios(boletos, cfg.whatsapp.nomeEmpresa);
     for (const [i, texto] of mensagens.entries()) {
       if (i > 0) await esperar(cfg.whatsapp.intervaloMs);
       await whatsapp.enviar(r.telefone, texto);
     }
-    log.info(`[boleto] enviado: ${ref}`);
+    log.info(`[boleto] enviado (${boletos.length} boleto(s)): ${ref}`);
     return "enviado";
   }
 

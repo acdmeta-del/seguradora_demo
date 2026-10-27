@@ -58,6 +58,11 @@ export function lerConfig(env = process.env) {
       metodoBoletos: (env.HINOVA_METODO_BOLETOS || "POST").toUpperCase(),
       boletoDiasAntes: num(env.HINOVA_BOLETO_DIAS_ANTES, 60),   // vencidos há até N dias
       boletoDiasDepois: num(env.HINOVA_BOLETO_DIAS_DEPOIS, 30), // vencendo nos próximos N dias
+      // Busca só por CPF: no máximo N boletos em aberto por pedido (evita excesso de mensagens)
+      maxBoletosCpf: num(env.HINOVA_MAX_BOLETOS_CPF, 4),
+      // Formato do cpf_associado enviado na busca só por CPF. A documentação só diz "String";
+      // digitos = "52998224725" | mascara = "529.982.247-25" (conferir com npm run testar-hinova -- CPF)
+      formatoCpf: env.HINOVA_FORMATO_CPF === "mascara" ? "mascara" : "digitos",
       // Detalhe de um boleto pelo número (marcador {codigo_boleto})
       pathBoletoDetalhe: env.HINOVA_PATH_BOLETO_DETALHE ?? "/buscar/boleto/{nosso_numero}",
       // Opcional: busca o associado quando o veículo não traz CPF/telefone do titular
@@ -76,6 +81,11 @@ export function lerConfig(env = process.env) {
         codigoAssociado: lista(env.HINOVA_CAMPO_CODIGO_ASSOCIADO || "codigo_associado,associado.codigo_associado"),
         vencimento: lista(env.HINOVA_CAMPO_VENCIMENTO || "data_vencimento,vencimento"),
         valor: lista(env.HINOVA_CAMPO_VALOR || "valor_boleto"),
+        // Veículos cobertos pelo boleto (doc: listar/boleto-associado-veiculo → veiculos[].placa/modelo;
+        // buscar/boleto → veiculos[].descricao_modelo)
+        veiculos: lista(env.HINOVA_CAMPO_VEICULOS || "veiculos"),
+        veiculoPlaca: lista(env.HINOVA_CAMPO_VEICULO_PLACA || "placa"),
+        veiculoModelo: lista(env.HINOVA_CAMPO_VEICULO_MODELO || "modelo,descricao_modelo"),
         linhaDigitavel: lista(env.HINOVA_CAMPO_LINHA || "linha_digitavel"),
         link: lista(env.HINOVA_CAMPO_LINK || "link_boleto,url_boleto,link"),
         pix: lista(env.HINOVA_CAMPO_PIX || "pix.copia_cola"),            // texto; "pix.qrcode" é a imagem

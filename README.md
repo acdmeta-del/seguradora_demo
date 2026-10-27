@@ -69,10 +69,13 @@ compatibilidade da CSP com o diálogo e com `fetch`.
 
 > **Documentação da API:** [`docs/api/hinova-sga-api-v2.md`](docs/api/hinova-sga-api-v2.md). Toda alteração nas chamadas à Hinova deve seguir esse documento (regras para agentes em [`AGENTS.md`](AGENTS.md)).
 
-O atalho "2ª via de boleto" abre um pop-up que pede **placa** e **CPF do titular**. O site **não mostra o boleto**: um intermediário (pasta `server/`) consulta o SGA Hinova e envia a 2ª via para o **WhatsApp cadastrado** do associado.
+O atalho "2ª via de boleto" abre um pop-up que pede o **CPF do titular** e, opcionalmente, a **placa**. O site **não mostra o boleto** nem nenhum dado do associado: um intermediário (pasta `server/`) consulta o SGA Hinova e envia a 2ª via para o **WhatsApp cadastrado** do associado.
+
+- **CPF + placa**: envia o boleto em aberto mais antigo daquele veículo (a listagem usa `placa`).
+- **Só CPF**: envia os boletos em aberto de todos os veículos do titular (a listagem usa `cpf_associado`), do vencimento mais antigo ao mais novo, até `HINOVA_MAX_BOLETOS_CPF` (padrão 4). No WhatsApp vai uma apresentação ("Encontramos N boletos em aberto") e, para cada boleto, o resumo com o veículo (modelo e **só o final da placa**, ex.: `placa final 3D63`) seguido do PIX sozinho. Boleto repetido (mesmo `nosso_numero`) conta uma vez.
 
 ```
-Site (GitHub Pages) ──placa+CPF+token anti-robô──▶ Intermediário (VPS / Easypanel) ──▶ SGA Hinova
+Site (GitHub Pages) ──CPF (+placa)+token anti-robô──▶ Intermediário (VPS / Easypanel) ──▶ SGA Hinova
                                                             └──▶ Z-API (WhatsApp) ──▶ celular cadastrado
 ```
 
@@ -83,9 +86,9 @@ Enquanto `boleto.endpoint` estiver vazio em `content/content.js`, o pop-up funci
 | Risco | Proteção |
 |---|---|
 | Chave da Hinova/WhatsApp exposta | Ficam só nas variáveis de ambiente do Easypanel. O site (público) nunca as recebe. |
-| SQL injection | Validação por lista de permissão no servidor: placa só `AAA9A99`/`AAA9999`, CPF só 11 dígitos com verificador válido. Qualquer outra coisa recebe 400 antes de chamar a Hinova. Os valores vão codificados, nunca como texto livre. A proteção final é o SGA usar consultas parametrizadas (responsabilidade da Hinova). |
+| SQL injection | Validação por lista de permissão no servidor: placa (se informada) só `AAA9A99`/`AAA9999`, CPF só 11 dígitos com verificador válido. Qualquer outra coisa recebe 400 antes de chamar a Hinova. Os valores vão codificados, nunca como texto livre. A proteção final é o SGA usar consultas parametrizadas (responsabilidade da Hinova). |
 | Robôs | Cloudflare Turnstile verificado no servidor + limite de 5 consultas/15 min por IP + teto global + no máximo 3 envios/dia por CPF. |
-| Descobrir quem é associado | Resposta e tempo de resposta sempre iguais, existindo ou não. Só envia se o CPF for do titular da placa, e só para o número cadastrado. |
+| Descobrir quem é associado | Resposta e tempo de resposta sempre iguais, existindo ou não. Só envia se o CPF for do titular (da placa, quando informada), só boletos desse CPF, e só para o número cadastrado. A página nunca mostra CPF, placa, telefone ou boleto. |
 | Outros sites usando a API | CORS e conferência do `Origin`: só `ALLOWED_ORIGINS`. |
 | Dados pessoais em logs | CPF, placa e telefone sempre mascarados. |
 
@@ -96,7 +99,7 @@ Enquanto `boleto.endpoint` estiver vazio em `content/content.js`, o pop-up funci
    - **Hinova** (documentação, seção 1): `HINOVA_TOKEN_SGA` é o token gerado no SGA em Área do cliente → APIs → Gerenciar APIs. Com `HINOVA_USUARIO` e `HINOVA_SENHA` (usuário ATIVO do SGA, de preferência só para a integração), o servidor autentica em `/usuario/autenticar` e usa o `token_usuario` devolvido, que não expira. Alternativa: `HINOVA_TOKEN_USUARIO` com um `token_usuario` já obtido. `HINOVA_TOKEN` continua aceito (legado). Em Gerenciar APIs, marque os endpoints usados: `usuario/autenticar`, `veiculo/buscar`, `listar/boleto-associado-veiculo` e `buscar/boleto`.
    - **Z-API** (`WHATSAPP_PROVIDER=zapi`): `ZAPI_INSTANCE` (ID da instância), `ZAPI_TOKEN` (token da instância) e `ZAPI_CLIENT_TOKEN` (token de segurança da conta, no menu Segurança do painel). Sem os três, o servidor não sobe em produção.
 3. **Domains**: use o subdomínio gratuito `*.easypanel.host` (HTTPS automático) apontando para a porta `3000`.
-4. **Teste a Hinova** no console do App: `npm run testar-hinova -- ABC1D23 52998224725`. Ele mostra os nomes dos campos das respostas (sem dados pessoais) para ajustar `HINOVA_PATH_*` e `HINOVA_CAMPO_*`, se preciso.
+4. **Teste a Hinova** no console do App: `npm run testar-hinova -- ABC1D23 52998224725` (placa + CPF) ou `npm run testar-hinova -- 52998224725` (só CPF, todos os veículos). Ele mostra os nomes dos campos das respostas (sem dados pessoais) para ajustar `HINOVA_PATH_*` e `HINOVA_CAMPO_*`, se preciso.
    **Teste a Z-API**: `npm run testar-whatsapp -- 11987654321` (use o seu número) envia uma mensagem de teste.
 5. **Turnstile**: no painel da Cloudflare, crie um widget para `acdmeta-del.github.io`. A chave de **site** vai em `content/content.js` (`boleto.turnstileSiteKey`); a chave **secreta**, só no Easypanel (`TURNSTILE_SECRET`).
 6. Cole a URL do App + `/api/boleto` em `boleto.endpoint` (`content/content.js`) e faça o commit.

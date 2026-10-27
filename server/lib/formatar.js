@@ -57,6 +57,20 @@ export function linkSeguro(v) {
   }
 }
 
+// Rótulo do veículo na mensagem ("CG 150 FAN · placa final 3D63"): só letras, números e
+// pontuação simples; sem formatação do WhatsApp, sem quebra de linha e nunca uma placa inteira
+export function rotuloVeiculo(v) {
+  const s = comoTexto(v);
+  if (!s) return null;
+  const limpo = s
+    .replace(/\b[A-Z]{3}[-\s]?[0-9][A-Z0-9][0-9]{2}\b/gi, "")
+    .replace(/[^\p{L}\p{N} .,/·-]/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 60);
+  return /[\p{L}\p{N}]/u.test(limpo) ? limpo : null;
+}
+
 /* ---------- PIX copia e cola (padrão EMV do Banco Central) ---------- */
 
 // CRC16-CCITT (poli 0x1021, inicial 0xFFFF), usado no campo 63 do PIX

@@ -181,3 +181,40 @@ test("boleto fetch remains allowed by connect-src", async (t) => {
   assert.equal(response, 404);
   assert.equal(requests.find((r) => r.url() === `${origin}/api/boleto`).method(), "POST");
 });
+
+test("2ª via: placa é opcional; sem placa envia só CPF e a página não mostra dado nenhum", async (t) => {
+  const { page, context } = await open(t);
+  const bodies = [];
+  await context.route("https://integra-demo.enwglb.easypanel.host/api/boleto", (route) => {
+    bodies.push(JSON.parse(route.request().postData()));
+    route.fulfill({ status: 200, contentType: "application/json", headers: { "Access-Control-Allow-Origin": origin }, body: JSON.stringify({ ok: true, mensagem: "genérica" }) });
+  });
+  // Turnstile simulado: aprova na hora, sem contato com a Cloudflare
+  await page.evaluate(() => { let o; window.turnstile = { render: (_el, opt) => { o = opt; setTimeout(() => o.callback("tok"), 0); return 1; }, reset() { setTimeout(() => o.callback("tok"), 0); } }; });
+  await page.locator('[data-open="boleto"]').first().click();
+  const dialog = page.locator("#boleto");
+  assert.equal(await dialog.isVisible(), true);
+  assert.equal(await page.locator("#b-placa").getAttribute("required"), null);
+
+  // Placa preenchida e inválida: erro, nada enviado
+  await page.fill("#b-cpf", "52998224725");
+  await page.fill("#b-placa", "AB1");
+  await page.locator('#boleto button[type="submit"]').click();
+  assert.equal(await page.locator("#boleto .quote-form__error").isVisible(), true);
+  assert.equal(bodies.length, 0);
+
+  // Placa em branco: envia só o CPF
+  await page.fill("#b-placa", "");
+  await page.locator('#boleto button[type="submit"]').click();
+  await page.locator("#boleto .boleto-form__ok").waitFor({ state: "visible" });
+  assert.deepEqual(bodies[0], { cpf: "52998224725", token: "tok" });
+  const texto = await dialog.innerText();
+  assert.ok(!/529\.?982|52998224725/.test(texto), "CPF não aparece na página");
+
+  // Placa + CPF continua valendo
+  await page.fill("#b-cpf", "529.982.247-25");
+  await page.fill("#b-placa", "abc1d23");
+  await page.locator('#boleto button[type="submit"]').click();
+  await page.waitForFunction(() => document.querySelector("#b-placa").value === "");
+  assert.deepEqual(bodies[1], { placa: "ABC1D23", cpf: "52998224725", token: "tok" });
+});

@@ -228,12 +228,13 @@
       <p id="boleto-texto" data-text="boleto.texto"></p>
       <form class="boleto-form" novalidate>
         <div class="field">
-          <label for="b-placa" data-text="boleto.campos.placa"></label>
-          <input id="b-placa" name="placa" type="text" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="8" placeholder="ABC1D23" required>
-        </div>
-        <div class="field">
           <label for="b-cpf" data-text="boleto.campos.cpf"></label>
           <input id="b-cpf" name="cpf" type="text" inputmode="numeric" autocomplete="off" maxlength="14" placeholder="000.000.000-00" required>
+        </div>
+        <div class="field">
+          <label for="b-placa" data-text="boleto.campos.placa"></label>
+          <input id="b-placa" name="placa" type="text" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="8" placeholder="ABC1D23" aria-describedby="b-placa-dica">
+          <p class="field__dica" id="b-placa-dica" data-text="boleto.dicaPlaca"></p>
         </div>
         <div class="boleto-form__captcha" id="boleto-turnstile"></div>
         <p class="quote-form__error" role="alert" hidden></p>

@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { lerConfig } from "../lib/config.js";
 import { criarHinova } from "../lib/hinova.js";
-import { normalizarTelefone, criarWhatsapp, montarMensagem, montarMensagens } from "../lib/whatsapp.js";
+import { normalizarTelefone, criarWhatsapp, montarMensagem, montarMensagens, montarMensagensVarios } from "../lib/whatsapp.js";
 
 
 // Valores no formato real (os fictícios simples são recusados pela validação de propósito)
@@ -204,7 +204,7 @@ test("boletos: busca o detalhe (/buscar/boleto/{número}) quando falta linha dig
     return { status: 200, text: async () => JSON.stringify([{ nosso_numero: 380977, data_vencimento: "10/11/2026", descricao_situacao_boleto: "ABERTO" }]) };
   };
   const b = await criarHinova(lerConfig({ HINOVA_TOKEN: "t" }).hinova, { fetchImpl }).buscarBoletoAberto({ placa: "PGN3D63" });
-  assert.deepEqual(b, { vencimento: "10/11/2026", valor: null, linhaDigitavel: LINHA, link: "https://b/", pix: PIX, alertas: [] });
+  assert.deepEqual(b, { vencimento: "10/11/2026", valor: null, linhaDigitavel: LINHA, link: "https://b/", pix: PIX, veiculos: [], alertas: [] });
   assert.deepEqual(urls, ["POST /listar/boleto-associado-veiculo", "GET /buscar/boleto/380977"]);
 });
 
@@ -389,7 +389,8 @@ test("resposta real de /listar/boleto-associado-veiculo (anonimizada): PIX, data
   const r = await criarHinova(lerConfig({ HINOVA_TOKEN: "t" }).hinova, { fetchImpl }).consultar({ placa: "PGN3D63", cpf: "52998224725" });
   assert.equal(r.resultado, "ok");
   assert.equal(r.telefone, "5587999999999");
-  assert.deepEqual(r.boleto, { vencimento: "05/11/2026", valor: "R$ 55,00", linhaDigitavel: LINHA, link: "https://short.hinova.com.br/v2/GyFl7YRm.pdf", pix: PIX_REAL, alertas: [] });
+  assert.deepEqual(r.boleto, { vencimento: "05/11/2026", valor: "R$ 55,00", linhaDigitavel: LINHA, link: "https://short.hinova.com.br/v2/GyFl7YRm.pdf", pix: PIX_REAL, veiculos: ["placa final 3D63"], alertas: [] });
+  assert.equal(r.boletos.length, 1, "mesmo nosso_numero repetido na lista conta uma vez só");
   assert.deepEqual(urls, ["POST /listar/boleto-associado-veiculo", "GET /veiculo/buscar/PGN3D63"], "lista já traz linha e PIX: sem chamada de detalhe");
   const texto = montarMensagem(r.boleto, "Integra Proteção Veicular");
   assert.ok(!texto.includes("[object"));
@@ -505,4 +506,99 @@ test("doc §0: aceita HINOVA_TOKEN_SGA e HINOVA_TOKEN_USUARIO (e o legado HINOVA
   assert.equal(sga.token, "token-sga");
   assert.equal(sga.modoAuth, "usuario");
   assert.equal(lerConfig({ HINOVA_TOKEN: "legado" }).hinova.token, "legado");
+});
+
+/* ---------- Busca só por CPF (vários veículos) ---------- */
+
+// Lista no formato real: cada boleto com seus veículos; sem telefone na lista (vem do veículo)
+function apiCpf(boletos, { telefoneVeiculo = "(87) 999999999" } = {}) {
+  const chamadas = [];
+  const fetchImpl = async (url, opt) => {
+    const caminho = url.replace(/^https:\/\/[^/]+\/api\/sga\/v2/, "");
+    chamadas.push({ caminho, metodo: opt.method, body: opt.body ? JSON.parse(opt.body) : null });
+    if (caminho === "/listar/boleto-associado-veiculo") return { status: 200, text: async () => JSON.stringify(boletos) };
+    if (caminho.startsWith("/veiculo/buscar/")) return { status: 200, text: async () => JSON.stringify({ ddd_celular: "87", telefone_celular: telefoneVeiculo.replace(/^\(\d+\)\s*/, "") }) };
+    return { status: 404, text: async () => "{}" };
+  };
+  return { fetchImpl, chamadas };
+}
+const boletoCpf = (nosso, venc, veiculos, extra = {}) => ({
+  cpf_associado: "529.982.247-25", nosso_numero: nosso, situacao_boleto: "ABERTO", data_pagamento: null,
+  data_vencimento: venc, valor_boleto: "55.00", linha_digitavel: LINHA, pix: { copia_cola: PIX }, veiculos, ...extra
+});
+
+test("só CPF: a listagem usa cpf_associado (sem placa no corpo), como na documentação", async () => {
+  const api = apiCpf([boletoCpf(1, "2026-11-05", [{ placa: "PGN3D63", modelo: "CG 150 FAN" }])]);
+  const r = await criarHinova(lerConfig({ HINOVA_TOKEN: "t" }).hinova, { fetchImpl: api.fetchImpl }).consultar({ placa: null, cpf: "52998224725" });
+  assert.equal(r.resultado, "ok");
+  const corpo = api.chamadas[0].body;
+  assert.equal(corpo.cpf_associado, "52998224725");
+  assert.ok(!("placa" in corpo));
+  assert.equal(corpo.link_boleto, true);
+  const mascara = apiCpf([boletoCpf(1, "2026-11-05", [{ placa: "PGN3D63" }])]);
+  await criarHinova(lerConfig({ HINOVA_TOKEN: "t", HINOVA_FORMATO_CPF: "mascara" }).hinova, { fetchImpl: mascara.fetchImpl }).consultar({ placa: null, cpf: "52998224725" });
+  assert.equal(mascara.chamadas[0].body.cpf_associado, "529.982.247-25");
+  // Telefone de reserva: pela placa do veículo que veio no próprio boleto desse CPF
+  assert.equal(api.chamadas[1].caminho, "/veiculo/buscar/PGN3D63");
+  assert.equal(r.telefone, "5587999999999");
+  assert.deepEqual(r.boleto.veiculos, ["CG 150 FAN · placa final 3D63"]);
+});
+
+test("só CPF: traz todos os boletos em aberto, sem repetir, do mais antigo ao mais novo, até o máximo", async () => {
+  const lista = [
+    boletoCpf(30, "2026-12-05", [{ placa: "QWE4R56", modelo: "ONIX" }]),
+    boletoCpf(10, "2026-10-05", [{ placa: "PGN3D63", modelo: "CG 150 FAN" }]),
+    boletoCpf(10, "2026-10-05", [{ placa: "PGN3D63", modelo: "CG 150 FAN" }]),       // repetido
+    boletoCpf(20, "2026-11-05", [{ placa: "PGN3D63", modelo: "CG 150 FAN" }, { placa: "QWE4R56", modelo: "ONIX" }]),
+    boletoCpf(40, "2026-09-05", [], { situacao_boleto: "BAIXADO" }),
+    boletoCpf(50, "2026-09-10", [], { data_pagamento: "2026-09-09" })
+  ];
+  const consultar = (env) => criarHinova(lerConfig({ HINOVA_TOKEN: "t", ...env }).hinova, { fetchImpl: apiCpf(lista).fetchImpl }).consultar({ placa: null, cpf: "52998224725" });
+  const r = await consultar({});
+  assert.equal(r.resultado, "ok");
+  assert.deepEqual(r.boletos.map((b) => b.vencimento), ["05/10/2026", "05/11/2026", "05/12/2026"]);
+  assert.deepEqual(r.boletos[1].veiculos, ["CG 150 FAN · placa final 3D63", "ONIX · placa final 4R56"]);
+  assert.equal(r.boleto, r.boletos[0]);
+  // Nenhum rótulo leva a placa inteira
+  assert.ok(!JSON.stringify(r.boletos).match(/PGN3D63|QWE4R56/));
+  const limitado = await consultar({ HINOVA_MAX_BOLETOS_CPF: "2" });
+  assert.equal(limitado.boletos.length, 2);
+});
+
+test("com placa: continua um boleto só, mesmo havendo outros em aberto", async () => {
+  const lista = [boletoCpf(10, "2026-10-05", []), boletoCpf(20, "2026-11-05", [])];
+  const api = apiCpf(lista);
+  const r = await criarHinova(lerConfig({ HINOVA_TOKEN: "t" }).hinova, { fetchImpl: api.fetchImpl }).consultar({ placa: "PGN3D63", cpf: "52998224725" });
+  assert.equal(r.boletos.length, 1);
+  assert.equal(api.chamadas[0].body.placa, "PGN3D63");
+  assert.ok(!("cpf_associado" in api.chamadas[0].body));
+});
+
+test("só CPF: boletos de outro CPF na resposta são descartados", async () => {
+  const lista = [boletoCpf(10, "2026-10-05", [{ placa: "PGN3D63" }]), boletoCpf(20, "2026-11-05", [{ placa: "QWE4R56" }], { cpf_associado: "111.444.777-35" })];
+  const r = await criarHinova(lerConfig({ HINOVA_TOKEN: "t" }).hinova, { fetchImpl: apiCpf(lista).fetchImpl }).consultar({ placa: null, cpf: "52998224725" });
+  assert.equal(r.resultado, "ok");
+  assert.equal(r.boletos.length, 1);
+  assert.equal(r.boletos[0].vencimento, "05/10/2026");
+});
+
+test("mensagens de vários boletos: apresentação e, para cada um, resumo seguido do PIX sozinho", () => {
+  const b = (venc, veiculos) => ({ vencimento: venc, valor: "R$ 55,00", linhaDigitavel: LINHA, pix: PIX, veiculos });
+  const msgs = montarMensagensVarios([b("05/10/2026", ["CG 150 FAN · placa final 3D63"]), b("05/11/2026", ["ONIX · placa final 4R56"])], "Integra");
+  assert.equal(msgs.length, 5);
+  assert.match(msgs[0], /\*2 boletos em aberto\*/);
+  assert.match(msgs[1], /Boleto 1 de 2/);
+  assert.match(msgs[1], /🚗 \*Veículo:\* CG 150 FAN · placa final 3D63/);
+  assert.equal(msgs[2], PIX);
+  assert.match(msgs[3], /Boleto 2 de 2[\s\S]*05\/11\/2026/);
+  assert.equal(msgs[4], PIX);
+  // Um boleto só: igual à busca por placa
+  assert.deepEqual(montarMensagensVarios([b("05/10/2026", [])], "Integra"), montarMensagens(b("05/10/2026", []), "Integra"));
+  assert.deepEqual(montarMensagensVarios([], "Integra"), []);
+});
+
+test("rótulo do veículo: sem placa inteira, sem formatação do WhatsApp nem quebra de linha", () => {
+  const [texto] = montarMensagens({ linhaDigitavel: LINHA, veiculos: ["*ONIX* ABC1D23\n_x_ `y`", { placa: "ABC1D23" }, "placa final 1D23"] }, "Integra");
+  const linha = texto.split("\n\n").find((p) => p.startsWith("🚗"));
+  assert.equal(linha, "🚗 *Veículos:* ONIX x y; placa final 1D23");
 });

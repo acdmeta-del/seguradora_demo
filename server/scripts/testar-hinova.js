@@ -1,6 +1,7 @@
 /*
  * Diagnóstico da integração com o SGA Hinova. Rode NA VPS (console do App no Easypanel):
- *   npm run testar-hinova -- ABC1D23 52998224725
+ *   npm run testar-hinova -- ABC1D23 52998224725   (placa + CPF: um veículo)
+ *   npm run testar-hinova -- 52998224725           (só CPF: todos os veículos do titular)
  *
  * Testa cada rota separadamente e mostra a ESTRUTURA das respostas (nomes dos
  * campos e tipos), sem imprimir valores pessoais nem o token, para conferir os
@@ -9,15 +10,18 @@
 import { lerConfig } from "../lib/config.js";
 import { criarHinova, comoLista, pegar, procurarCampo } from "../lib/hinova.js";
 import { mesmoTelefone } from "../lib/whatsapp.js";
-import { normalizarPlaca, normalizarCpf, mascararCpf, mascararTelefone } from "../lib/validar.js";
+import { normalizarPlaca, normalizarCpf, mascararCpf, mascararTelefone, mascararPlaca } from "../lib/validar.js";
 
-const [placaArg, cpfArg] = process.argv.slice(2);
-const placa = normalizarPlaca(placaArg || "");
+// Com dois argumentos: PLACA CPF. Com um só: CPF (busca por todos os veículos do titular)
+const args = process.argv.slice(2);
+const [placaArg, cpfArg] = args.length === 1 ? [null, args[0]] : args;
+const placa = placaArg ? normalizarPlaca(placaArg) : null;
 const cpf = normalizarCpf(cpfArg || "");
-if (!placa || !cpf) {
-  console.error("Uso: npm run testar-hinova -- PLACA CPF   (ex.: ABC1D23 52998224725)");
+if ((placaArg && !placa) || !cpf || args.length > 2) {
+  console.error("Uso: npm run testar-hinova -- PLACA CPF   (ex.: ABC1D23 52998224725)\n     npm run testar-hinova -- CPF         (só CPF, todos os veículos)");
   process.exit(1);
 }
+console.log(`Busca: ${placa ? `placa ${mascararPlaca(placa)} + CPF` : "só CPF (todos os veículos do titular)"} ${mascararCpf(cpf)}`);
 
 const cfg = lerConfig().hinova;
 const h = criarHinova(cfg);
@@ -79,7 +83,9 @@ if (cfg.modoAuth === "token") {
 }
 
 // 2. Veículo
-if (cfg.pathVeiculo) {
+if (!placa) {
+  etapa(2, "Veículo: não consultado agora (só CPF; o fluxo completo usa um veículo da lista, se faltar telefone)");
+} else if (cfg.pathVeiculo) {
   etapa(2, `Veículo: GET ${cfg.pathVeiculo}`);
   try {
     const r = await h._get(h._preencher(cfg.pathVeiculo, { placa }));
@@ -91,7 +97,7 @@ if (cfg.pathVeiculo) {
 }
 
 // 3. Lista de boletos (mesma chamada do n8n): de onde vêm o CPF do titular e o telefone
-etapa(3, `Boletos: ${cfg.metodoBoletos} ${cfg.pathBoletos} (vencimento de -${cfg.boletoDiasAntes} a +${cfg.boletoDiasDepois} dias)`);
+etapa(3, `Boletos: ${cfg.metodoBoletos} ${cfg.pathBoletos} por ${placa ? "placa" : `cpf_associado (formato ${cfg.formatoCpf})`} (vencimento de -${cfg.boletoDiasAntes} a +${cfg.boletoDiasDepois} dias)`);
 try {
   const lista = await h.listarBoletos({ placa, cpf });
   console.log(`  ${lista.length} boleto(s) no período.`);
@@ -116,10 +122,12 @@ etapa(4, "Fluxo completo (o que o site faz)");
 try {
   const r = await h.consultar({ placa, cpf });
   console.log(`  Resultado: ${r.resultado}`);
-  if (r.boleto) {
-    console.log(`  Vencimento: ${r.boleto.vencimento ?? "-"}`);
-    for (const a of r.boleto.alertas || []) console.log(`  ALERTA: ${a}`);
-    console.log(`  Linha digitável: ${r.boleto.linhaDigitavel ? "válida" : "ausente ou inválida"} | Link: ${r.boleto.link ? "válido (https)" : "ausente"} | PIX copia e cola: ${r.boleto.pix ? "válido (CRC confere)" : "não encontrado ou inválido"}`);
+  const boletos = r.boletos || (r.boleto ? [r.boleto] : []);
+  if (boletos.length > 1) console.log(`  ${boletos.length} boletos em aberto serão enviados (máximo HINOVA_MAX_BOLETOS_CPF=${cfg.maxBoletosCpf}).`);
+  for (const [i, b] of boletos.entries()) {
+    console.log(`  ${boletos.length > 1 ? `Boleto ${i + 1}: ` : ""}Vencimento: ${b.vencimento ?? "-"} | Valor: ${b.valor ?? "-"} | Veículos: ${b.veiculos?.length ? b.veiculos.join("; ") : "-"}`);
+    for (const a of b.alertas || []) console.log(`  ALERTA: ${a}`);
+    console.log(`  Linha digitável: ${b.linhaDigitavel ? "válida" : "ausente ou inválida"} | Link: ${b.link ? "válido (https)" : "ausente"} | PIX copia e cola: ${b.pix ? "válido (CRC confere)" : "não encontrado ou inválido"}`);
   }
 } catch (e) { falhou(e); }
 

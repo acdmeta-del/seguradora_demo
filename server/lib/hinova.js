@@ -19,6 +19,7 @@
  * caminho (encodeURIComponent), nunca como texto livre.
  */
 import { extrairTelefone } from "./whatsapp.js";
+import { normalizarPlaca, finalPlaca } from "./validar.js";
 import { formatarData, formatarValor, linhaDigitavel, linkSeguro, pixDoCampo } from "./formatar.js";
 // Lê o primeiro campo existente de uma lista ("a", "a.b")
 export function pegar(obj, caminhos) {
@@ -206,7 +207,9 @@ export function criarHinova(cfg, { fetchImpl = fetch, agora = Date.now } = {}) {
     const { dados } = cfg.metodoBoletos === "GET"
       ? await get(caminho)
       : await requisitar("POST", caminho, {
-          placa: valores.placa,
+          // Documentação (Boleto › listar/boleto-associado-veiculo): basta UM identificador.
+          // Com placa: só aquele veículo. Sem placa: cpf_associado (string) → todos os veículos.
+          ...(valores.placa ? { placa: valores.placa } : { cpf_associado: cpfParaBusca(valores.cpf) }),
           data_vencimento_inicial: dataBr(-cfg.boletoDiasAntes),
           data_vencimento_final: dataBr(cfg.boletoDiasDepois),
           link_boleto: true
@@ -222,15 +225,38 @@ export function criarHinova(cfg, { fetchImpl = fetch, agora = Date.now } = {}) {
     return Boolean(sit) && cfg.situacoesAbertas.map(semAcento).includes(sit) && !pago;
   }
 
-  async function buscarBoletoAberto(valores, listaPronta) {
-    const abertos = (listaPronta || (await listarBoletos(valores))).filter(estaAberto);
-    // Vencimento mais antigo primeiro: é a 2ª via mais urgente
+  const cpfParaBusca = (cpf) => (cfg.formatoCpf === "mascara"
+    ? String(cpf).replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/, "$1.$2.$3-$4")
+    : String(cpf));
+
+  // Rótulo dos veículos cobertos pelo boleto, para o associado identificar na mensagem:
+  // "CG 150 FAN ESDI · placa final 3D63". Só modelo e final da placa (nada de placa inteira).
+  function veiculosDe(b) {
+    const lista = pegar(b, cfg.campos.veiculos);
+    return (Array.isArray(lista) ? lista : []).map((v) => {
+      const modelo = comoTextoSimples(pegar(v, cfg.campos.veiculoModelo)).replace(/\s+/g, " ").slice(0, 40);
+      const fim = finalPlaca(comoTextoSimples(pegar(v, cfg.campos.veiculoPlaca)));
+      return [modelo, fim ? `placa final ${fim}` : ""].filter(Boolean).join(" · ");
+    }).filter(Boolean);
+  }
+
+  // Boletos em aberto, do vencimento mais antigo ao mais novo, sem repetir o mesmo nosso_numero.
+  // Só serve boleto com linha digitável ou PIX (consulta o detalhe se a lista não trouxer).
+  async function buscarBoletosAbertos(valores, listaPronta, max = 1) {
+    const vistos = new Set();
+    const abertos = (listaPronta || (await listarBoletos(valores))).filter(estaAberto).filter((b) => {
+      const n = comoTextoSimples(pegar(b, cfg.campos.codigoBoleto));
+      if (n && vistos.has(n)) return false;
+      if (n) vistos.add(n);
+      return true;
+    });
     abertos.sort((a, b) => dataNum(pegar(a, cfg.campos.vencimento)) - dataNum(pegar(b, cfg.campos.vencimento)));
 
-    // Tenta até 3 boletos: só serve um que tenha linha digitável ou PIX
-    for (const candidato of abertos.slice(0, 3)) {
+    const escolhidos = [];
+    for (const candidato of abertos.slice(0, max + 2)) {
+      if (escolhidos.length >= max) break;
       let b = candidato;
-      // Detalhe (GET /buscar/boleto/{nosso_numero}) quando a lista não traz linha digitável ou PIX
+      // Detalhe (GET /buscar/boleto/:nosso_numero) quando a lista não traz linha digitável ou PIX
       const codigo = pegar(b, cfg.campos.codigoBoleto);
       const incompleto = !linhaDigitavel(pegar(b, cfg.campos.linhaDigitavel)) || !pixDoCampo(b, cfg.campos.pix).pix;
       if (incompleto && codigo && cfg.pathBoletoDetalhe) {
@@ -245,16 +271,21 @@ export function criarHinova(cfg, { fetchImpl = fetch, agora = Date.now } = {}) {
       const alertas = [];
       if (pix.presente && !pix.pix) alertas.push(`PIX no campo "${pix.campo}" não é um código válido; enviado sem PIX`);
       if (!pix.presente) alertas.push(`campo de PIX (${cfg.campos.pix.join(" | ")}) não veio na resposta; enviado sem PIX`);
-      return {
+      escolhidos.push({
         vencimento: formatarData(pegar(b, cfg.campos.vencimento)),
         valor: formatarValor(pegar(b, cfg.campos.valor)),
         linhaDigitavel: linha,
         link: linkSeguro(pegar(b, cfg.campos.link)),
         pix: pix.pix,
+        veiculos: veiculosDe(candidato).length ? veiculosDe(candidato) : veiculosDe(b),
         alertas
-      };
+      });
     }
-    return null;
+    return escolhidos;
+  }
+
+  async function buscarBoletoAberto(valores, listaPronta) {
+    return (await buscarBoletosAbertos(valores, listaPronta, 1))[0] || null;
   }
 
   const digitos = (v) => String(v || "").replace(/\D/g, "");
@@ -289,9 +320,21 @@ export function criarHinova(cfg, { fetchImpl = fetch, agora = Date.now } = {}) {
     const doTitular = lista.filter((_, i) => !dados[i].cpf || dados[i].cpf === cpf);
     let telefone = (dados.find((d, i) => d.telefone && doTitular.includes(lista[i])) || {}).telefone || "";
 
-    // Reservas: veículo e associado, só para completar o que faltou
-    if ((!cpfTitular || !telefone) && cfg.pathVeiculo) {
-      const veiculo = await buscarVeiculo(placa);
+    // Reservas: veículo e associado, só para completar o que faltou. Sem placa no pedido,
+    // usa a placa de um veículo da própria lista de boletos desse CPF.
+    const placaDaLista = () => {
+      for (const b of doTitular) {
+        const veiculos = pegar(b, cfg.campos.veiculos);
+        for (const v of Array.isArray(veiculos) ? veiculos : []) {
+          const p = normalizarPlaca(comoTextoSimples(pegar(v, cfg.campos.veiculoPlaca)));
+          if (p) return p;
+        }
+      }
+      return null;
+    };
+    const placaReserva = placa || placaDaLista();
+    if ((!cpfTitular || !telefone) && cfg.pathVeiculo && placaReserva) {
+      const veiculo = await buscarVeiculo(placaReserva);
       if (veiculo) {
         valores.codigo_veiculo = pegar(veiculo, cfg.campos.codigoVeiculo);
         valores.codigo_associado = pegar(veiculo, cfg.campos.codigoAssociado);
@@ -310,11 +353,12 @@ export function criarHinova(cfg, { fetchImpl = fetch, agora = Date.now } = {}) {
     if (!cpfTitular) return { resultado: "cpf_titular_nao_encontrado" };
     if (cpfTitular !== cpf) return { resultado: "cpf_nao_confere" };
 
-    const boleto = await buscarBoletoAberto(valores, doTitular);
-    if (!boleto) return { resultado: "sem_boleto_aberto" };
+    // Com placa: o boleto daquele veículo. Só CPF: todos os abertos (até maxBoletosCpf).
+    const boletos = await buscarBoletosAbertos(valores, doTitular, placa ? 1 : Math.max(1, cfg.maxBoletosCpf));
+    if (!boletos.length) return { resultado: "sem_boleto_aberto" };
     if (!telefone) return { resultado: "sem_telefone" };
-    return { resultado: "ok", telefone, boleto };
+    return { resultado: "ok", telefone, boleto: boletos[0], boletos };
   }
 
-  return { autenticar, buscarVeiculo, listarBoletos, buscarBoletoAberto, consultar, titularDe, estaAberto, _chamar: chamar, _get: get, _preencher: preencher };
+  return { autenticar, buscarVeiculo, listarBoletos, buscarBoletoAberto, buscarBoletosAbertos, consultar, titularDe, estaAberto, _chamar: chamar, _get: get, _preencher: preencher };
 }
