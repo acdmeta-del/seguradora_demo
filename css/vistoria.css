@@ -1,0 +1,96 @@
+/* ==========================================================================
+   VISTORIA (TESTE, Fase 1): página de captura guiada.
+   Usa os tokens de css/styles.css. Mobile first: uso em pé, ao lado do carro,
+   muitas vezes no sol: botões grandes, texto forte e alto contraste.
+   ========================================================================== */
+/* "hidden" sempre vence (o .btn do site define display e anularia o atributo) */
+.vistoria [hidden] { display: none !important; }
+body.vistoria { padding-top: 0; background: var(--color-soft); color: var(--color-heading); font-size: 1.0625rem; }
+
+.v-topo { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); padding: var(--space-3) var(--gutter); background: #fff; border-bottom: 1px solid var(--color-line); }
+.v-topo__tag { padding: 2px var(--space-3); border-radius: var(--radius-pill); background: var(--color-brand-tint); color: var(--color-brand-text); font-weight: 800; font-size: var(--fs-sm); }
+.v-dev-faixa { margin: 0; padding: var(--space-2) var(--gutter); background: #FFE27A; color: #3A2E00; font-weight: 800; font-size: var(--fs-sm); text-align: center; }
+
+.v-main { max-width: 720px; margin: 0 auto; padding: var(--space-4) var(--gutter) var(--space-7); }
+.v-tela h1, .v-tela h2 { margin: 0 0 var(--space-2); color: var(--color-heading); line-height: 1.2; }
+.v-tela h1 { font-size: 1.75rem; }
+.v-tela h2 { font-size: 1.375rem; }
+.v-tela p { margin: 0 0 var(--space-3); }
+.v-nota { font-size: var(--fs-sm); color: var(--color-text); }
+.v-aviso { margin: 0 0 var(--space-4); padding: var(--space-3); border-radius: var(--radius-md); background: var(--color-error); color: #fff; font-weight: 800; }
+.v-retomada { padding: var(--space-3); border-radius: var(--radius-md); background: var(--color-brand-tint); color: var(--color-brand-text); font-weight: 700; }
+.v-check { display: flex; gap: var(--space-2); align-items: flex-start; margin: var(--space-3) 0; font-weight: 600; }
+.v-check input { width: 22px; height: 22px; flex: none; margin-top: 2px; accent-color: var(--color-brand-text); }
+
+.v-acoes { display: grid; gap: var(--space-3); margin-top: var(--space-4); }
+.v-btn-grande { min-height: 60px; font-size: 1.125rem; font-weight: 900; }
+.vistoria .btn { min-height: 52px; }
+.vistoria .btn:disabled { opacity: .45; cursor: not-allowed; }
+.v-perigo { color: var(--color-error); border-color: var(--color-error); }
+.v-link { justify-self: center; padding: var(--space-2); border: 0; background: none; color: var(--color-brand-text); font: inherit; font-weight: 800; text-decoration: underline; cursor: pointer; }
+label.btn { display: flex; align-items: center; justify-content: center; cursor: pointer; }
+
+/* Progresso */
+.v-progresso { margin-bottom: var(--space-3); }
+.v-progresso__barra { height: 10px; border-radius: var(--radius-pill); background: var(--color-line); overflow: hidden; }
+.v-progresso__barra span { display: block; height: 100%; width: 0; background: var(--color-brand); transition: width .3s; }
+.v-progresso p { margin: var(--space-1) 0 0; font-size: var(--fs-sm); font-weight: 700; }
+.v-instrucao { font-weight: 700; }
+
+/* Câmera: mostra o quadro inteiro (o que você vê é o que a foto pega) */
+.v-camera { position: relative; aspect-ratio: 4 / 3; border-radius: var(--radius-lg); background: #111; overflow: hidden; }
+.v-camera video { width: 100%; height: 100%; object-fit: contain; display: block; }
+.v-camera__erro { position: absolute; inset: auto var(--space-3) var(--space-3); margin: 0; padding: var(--space-3); border-radius: var(--radius-md); background: var(--color-error); color: #fff; font-weight: 800; }
+.v-silhueta { position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none; }
+.v-silhueta svg { width: 100%; height: 100%; }
+.v-silhueta__forma { fill: none; stroke: #fff; stroke-width: 3; stroke-linejoin: round; stroke-linecap: round; opacity: .85; filter: drop-shadow(0 0 2px rgba(0, 0, 0, .9)); }
+.v-silhueta__faixa { fill: none; stroke: var(--color-brand); stroke-width: 1.5; stroke-dasharray: 6 6; opacity: .8; }
+.v-nivel { position: absolute; left: 50%; top: var(--space-3); transform: translateX(-50%); display: grid; justify-items: center; gap: 4px; padding: 6px var(--space-3); border-radius: var(--radius-pill); background: rgba(0, 0, 0, .7); color: #FFD54F; font-weight: 900; font-size: var(--fs-sm); }
+.v-nivel__linha { display: block; width: 90px; height: 4px; border-radius: 2px; background: currentColor; transition: transform .1s linear; }
+.v-nivel--ok { color: var(--color-brand); }
+
+/* Resultado */
+.v-previa { position: relative; margin: 0 0 var(--space-3); border-radius: var(--radius-lg); background: #111; overflow: hidden; }
+.v-previa img { display: block; width: 100%; height: auto; min-height: 120px; object-fit: contain; }
+.v-caixa { position: absolute; margin: 0; border: 3px solid var(--color-brand); color: var(--color-on-brand); font-size: 12px; font-weight: 900; }
+.v-caixa { text-shadow: 0 0 3px #fff; }
+.v-selo { display: inline-block; padding: var(--space-1) var(--space-4); border-radius: var(--radius-pill); font-weight: 900; }
+.v-selo--ok { background: var(--color-brand); color: var(--color-on-brand); }
+.v-selo--erro { background: var(--color-error); color: #fff; }
+.v-motivos { list-style: none; margin: 0 0 var(--space-3); padding: 0; display: grid; gap: var(--space-2); }
+.v-motivo { display: flex; gap: var(--space-2); padding: var(--space-3); border-radius: var(--radius-md); background: #fff; font-weight: 700; border-left: 6px solid; }
+.v-motivo--erro { border-color: var(--color-error); }
+.v-motivo--aviso { border-color: #E0A100; }
+.v-motivo span { flex: none; font-weight: 900; }
+
+/* Revisão */
+.v-grade { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-3); }
+.v-item { display: grid; grid-template-columns: 96px 1fr; gap: var(--space-3); align-items: center; padding: var(--space-3); border-radius: var(--radius-md); background: #fff; border-left: 6px solid var(--color-line); }
+.v-item img, .v-item__vazio { width: 96px; height: 64px; object-fit: cover; border-radius: var(--radius-sm); background: var(--color-line); display: block; }
+.v-item__texto { display: grid; gap: 2px; min-width: 0; }
+.v-item__status { font-size: var(--fs-sm); font-weight: 700; }
+.v-item .btn { grid-column: 1 / -1; }
+.v-item--aprovada { border-left-color: var(--color-brand); }
+.v-item--forcada { border-left-color: #E0A100; }
+.v-item--pulada { border-left-color: var(--color-text); }
+
+/* Painel de diagnóstico (dev) */
+.v-painel { margin-top: var(--space-6); padding: var(--space-3); border: 2px dashed #E0A100; border-radius: var(--radius-md); background: #fff; }
+.v-painel summary { font-weight: 900; cursor: pointer; }
+.v-camadas { margin: var(--space-3) 0; border: 0; padding: 0; }
+.v-camadas legend { font-weight: 800; }
+.v-ajuste { margin: var(--space-3) 0; }
+.v-ajuste label { display: block; font-size: var(--fs-sm); font-weight: 700; }
+.v-ajuste input { width: 100%; accent-color: var(--color-brand-text); }
+.v-metricas { margin-top: var(--space-4); overflow-x: auto; }
+.v-metricas table { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); background: #fff; }
+.v-metricas caption { text-align: left; font-weight: 900; padding-bottom: var(--space-2); }
+.v-metricas th, .v-metricas td { padding: 4px 6px; border-bottom: 1px solid var(--color-line); text-align: left; vertical-align: top; overflow-wrap: anywhere; }
+
+@media (min-width: 768px) {
+  .v-acoes { grid-template-columns: 1fr 1fr; }
+  .v-acoes .v-btn-grande { grid-column: 1 / -1; }
+  .v-item { grid-template-columns: 160px 1fr auto; }
+  .v-item img, .v-item__vazio { width: 160px; height: 90px; }
+  .v-item .btn { grid-column: auto; }
+}

@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Vistoria (teste) | Integra Proteção Veicular</title>
+  <!-- Página de TESTE da captura de vistoria (Fase 1): não aparece no site nem em buscadores -->
+  <meta name="robots" content="noindex,nofollow">
+  <meta name="theme-color" content="#98C61D">
+  <!-- Segurança: nenhuma conexão externa. Biblioteca e modelo de detecção ficam em js/vendor e
+       assets/modelos; as fotos ficam só no aparelho (blob:/IndexedDB) e nunca são enviadas. -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'none'">
+  <meta name="referrer" content="no-referrer">
+  <link rel="icon" href="assets/escudo-ativo.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&display=swap">
+  <link rel="stylesheet" href="css/styles.css">
+  <link rel="stylesheet" href="css/vistoria.css">
+</head>
+<body class="vistoria">
+  <header class="v-topo">
+    <img src="assets/logo.svg" alt="Integra Proteção Veicular" width="120" height="32">
+    <span class="v-topo__tag">Vistoria · teste</span>
+  </header>
+
+  <!-- FASE 2: REMOVER (modo desenvolvedor, ?dev=1) -->
+  <p class="v-dev-faixa" id="v-dev-faixa" hidden>Modo desenvolvedor ativo: envio de arquivo e "forçar aceitar" liberados. Só para testes.</p>
+
+  <main class="v-main" id="conteudo">
+    <p class="v-aviso" id="v-aviso" role="alert" hidden></p>
+
+    <!-- 1. Início -->
+    <section class="v-tela" id="v-inicio" aria-labelledby="v-inicio-titulo">
+      <h1 id="v-inicio-titulo">Fotos da vistoria</h1>
+      <p>Vamos guiar você foto por foto. Cada foto é conferida na hora: nitidez, luz e enquadramento.</p>
+      <p class="v-nota">Página de teste: as fotos ficam só neste aparelho, não são enviadas a ninguém e são apagadas sozinhas em algumas horas.</p>
+      <label class="v-check"><input type="checkbox" id="v-geo"> Registrar a localização no relatório (fica só neste aparelho)</label>
+      <p class="v-retomada" id="v-retomada" hidden></p>
+      <div class="v-acoes">
+        <button class="btn btn--primary btn--block v-btn-grande" type="button" id="v-comecar">Começar</button>
+        <button class="btn btn--outline btn--block" type="button" id="v-ir-revisao" hidden>Ver fotos já tiradas</button>
+      </div>
+    </section>
+
+    <!-- 2. Captura -->
+    <section class="v-tela" id="v-captura" aria-labelledby="v-slot-nome" hidden>
+      <div class="v-progresso">
+        <div class="v-progresso__barra" role="progressbar" aria-labelledby="v-progresso-texto" aria-valuemin="0" aria-valuemax="11" aria-valuenow="0"><span id="v-progresso-fill"></span></div>
+        <p id="v-progresso-texto"></p>
+      </div>
+      <h2 id="v-slot-nome"></h2>
+      <p class="v-instrucao" id="v-slot-instrucao"></p>
+      <div class="v-camera" id="v-camera">
+        <video id="v-video" playsinline muted autoplay></video>
+        <div class="v-silhueta" id="v-silhueta" aria-hidden="true"></div>
+        <div class="v-nivel" id="v-nivel" hidden aria-live="polite"><span class="v-nivel__linha" id="v-nivel-linha"></span><span class="v-nivel__texto" id="v-nivel-texto"></span></div>
+        <p class="v-camera__erro" id="v-camera-erro" hidden></p>
+      </div>
+      <div class="v-acoes">
+        <button class="btn btn--primary btn--block v-btn-grande" type="button" id="v-capturar">Tirar foto</button>
+        <button class="btn btn--outline btn--block" type="button" id="v-pular" hidden>Pular (não se aplica)</button>
+        <!-- FASE 2: REMOVER (envio de arquivo só no ?dev=1) -->
+        <label class="btn btn--outline btn--block v-dev-only" id="v-arquivo-rotulo" hidden>Enviar arquivo (dev)
+          <input type="file" id="v-arquivo" accept="image/*" class="visually-hidden">
+        </label>
+        <button class="btn btn--outline btn--block" type="button" id="v-orientacao-permitir" hidden>Ativar nível do celular</button>
+        <button class="v-link" type="button" id="v-ver-revisao">Ver todas as fotos</button>
+      </div>
+    </section>
+
+    <!-- 3. Resultado da foto -->
+    <section class="v-tela" id="v-resultado" aria-labelledby="v-resultado-titulo" hidden>
+      <h2 id="v-resultado-titulo"></h2>
+      <figure class="v-previa"><img id="v-previa-img" alt=""><figcaption class="v-caixa" id="v-caixa" hidden></figcaption></figure>
+      <div class="v-status" id="v-status" role="status" aria-live="polite"></div>
+      <div class="v-acoes">
+        <button class="btn btn--primary btn--block v-btn-grande" type="button" id="v-aceitar">Usar esta foto</button>
+        <button class="btn btn--outline btn--block" type="button" id="v-refazer">Tirar de novo</button>
+        <!-- FASE 2: REMOVER ("forçar aceitar" só no ?dev=1) -->
+        <button class="btn btn--outline btn--block v-dev-only" type="button" id="v-forcar" hidden>Forçar aceitar (dev)</button>
+      </div>
+      <div class="v-metricas v-dev-only" id="v-metricas" hidden></div>
+    </section>
+
+    <!-- 4. Revisão -->
+    <section class="v-tela" id="v-revisao" aria-labelledby="v-revisao-titulo" hidden>
+      <h2 id="v-revisao-titulo">Revisão das fotos</h2>
+      <p id="v-revisao-resumo"></p>
+      <ul class="v-grade" id="v-grade"></ul>
+      <div class="v-acoes">
+        <button class="btn btn--primary btn--block" type="button" id="v-continuar">Continuar fotos</button>
+        <button class="btn btn--outline btn--block" type="button" id="v-relatorio">Exportar relatório do teste (JSON)</button>
+        <button class="btn btn--outline btn--block" type="button" id="v-zip">Baixar relatório + miniaturas (ZIP)</button>
+        <button class="btn btn--outline btn--block v-perigo" type="button" id="v-limpar">Limpar tudo</button>
+      </div>
+    </section>
+
+    <!-- FASE 2: REMOVER (painel de diagnóstico, só no ?dev=1) -->
+    <details class="v-painel v-dev-only" id="v-painel" hidden>
+      <summary>Painel de diagnóstico</summary>
+      <p class="v-nota" id="v-detector-status"></p>
+      <fieldset class="v-camadas" id="v-camadas"><legend>Camadas</legend></fieldset>
+      <div class="v-ajustes" id="v-ajustes"></div>
+      <div class="v-acoes">
+        <button class="btn btn--outline btn--block" type="button" id="v-exportar-config">Exportar configuração ajustada (JSON)</button>
+        <button class="btn btn--outline btn--block" type="button" id="v-restaurar-config">Voltar aos limites padrão</button>
+      </div>
+    </details>
+  </main>
+
+  <script src="js/vistoria-config.js"></script>
+  <script src="js/vistoria-qualidade.js"></script>
+  <script src="js/vistoria-posicao.js"></script>
+  <script src="js/vistoria.js"></script>
+</body>
+</html>

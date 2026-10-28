@@ -27,6 +27,7 @@ Placeholders aparecem entre `[colchetes]` ou com `0000`.
 
 - GSAP 3.12.5 (cdnjs, versão fixa), com cópia local em `js/vendor/` caso o CDN não carregue
 - Google Fonts (Nunito)
+- Só na página de teste da vistoria: TensorFlow.js 4.22.0 e COCO-SSD 2.2.3, locais em `js/vendor/`, e o modelo em `assets/modelos/` (Apache 2.0)
 
 O carro entra pela direita assim que a página carrega, sempre, mesmo com as animações do sistema desligadas (decisão do projeto). Sem JavaScript, ele já aparece estacionado.
 
@@ -64,6 +65,59 @@ Os testes usam um servidor local e dados fictícios, sem acessar serviços exter
 Cobrem JavaScript desativado, scripts ausentes, falhas de inicialização e de submit,
 envio nativo forçado, validação, máscara, clique/Enter, pop-up bloqueado e a
 compatibilidade da CSP com o diálogo e com `fetch`.
+
+## Vistoria: página de TESTE da captura (Fase 1, sem API)
+
+`vistoria-teste.html` valida, só no navegador, a experiência de tirar as fotos da vistoria. Ela não aparece no menu (`noindex,nofollow`, acesso direto pela URL) e **não faz nenhuma chamada de rede com fotos ou dados**. Nada de Hinova, nada de `server/`, nada de Turnstile. As fotos ficam na memória e no IndexedDB do aparelho e **expiram sozinhas em 4 horas** (`armazenamento.expiraHoras`). "Limpar tudo" apaga na hora.
+
+- **Endereço:** `https://acdmeta-del.github.io/seguradora_demo/vistoria-teste.html`. Para o modo desenvolvedor, acrescente `?dev=1`.
+- **Celular:** abra o endereço acima. A câmera e a localização exigem HTTPS, que o GitHub Pages já fornece.
+- **Computador:** `npx http-server -p 8080` (ou outro servidor estático) e `http://localhost:8080/vistoria-teste.html?dev=1`. `localhost` conta como endereço seguro. Por IP da rede (`http://192.168...`) a câmera **não** abre: use um túnel HTTPS ou o GitHub Pages.
+
+| Arquivo | Papel |
+|---|---|
+| `js/vistoria-config.js` | Ângulos (com `codigoTipoSgaPendente: null` para a Fase 2), limites, camadas ligáveis, faixas dos sliders |
+| `js/vistoria-qualidade.js` | Funções puras: resolução, nitidez (variância do Laplaciano), exposição, contraluz, dHash, duplicada, lado repetido |
+| `js/vistoria-posicao.js` | Nível do celular, detector COCO-SSD, enquadramento, estimativa de ângulo e o ponto de extensão `analisarFoto(imagem, slot)` |
+| `js/vistoria.js` | Interface: câmera, fluxo, revisão, painel dev, relatório JSON/ZIP, IndexedDB com expiração |
+| `css/vistoria.css` | Visual mobile first (botões grandes, contraste para uso no sol) |
+| `js/vendor/tf-4.22.0.min.js`, `js/vendor/coco-ssd-2.2.3.min.js`, `assets/modelos/coco-ssd-lite/` | Detector **local** (~18 MB, baixado só no primeiro ângulo externo). Origem e SHA-256 no `LEIA-ME.md` do modelo |
+
+**Camadas de validação** (todas ligáveis no painel dev; só as marcadas como "reprova" impedem avançar):
+
+| Camada | Efeito | O que detecta bem | Limitações |
+|---|---|---|---|
+| Qualidade | reprova | foto tremida ou fora de foco, muito escura ou clara, reflexo forte, resolução baixa, celular em pé nos ângulos externos | a nitidez muda com o aparelho e a textura do carro (carro liso e limpo mede menos): calibre com os sliders |
+| Contraluz | reprova | sol atrás do carro (centro bem mais escuro que as bordas) | carro escuro em fundo claro também cai aqui |
+| Legibilidade (odômetro, chassi) | reprova | centro desfocado | não lê os números (o OCR fica para depois, ver abaixo) |
+| Duplicada (dHash) | **só avisa** | a mesma foto repetida | fundo igual com pouca diferença pode avisar à toa |
+| Lado repetido (espelho) | **só avisa** | a mesma lateral ou diagonal tirada duas vezes (compara com o par espelhado, usando o recorte do veículo quando há caixa) | depende do fundo e da iluminação dos dois lados |
+| Inclinação | reprova | celular torto ou apontado para o chão/céu | no iPhone exige tocar em "Ativar nível"; sem sensor, a camada fica sem opinião |
+| Detecção (COCO-SSD) | reprova | sem carro, carro pequeno, cortado na borda, fora do centro | não serve para painel, chassi e porta-malas (só ângulos externos); 1 a 3 s por foto no celular |
+| Ângulo (proporção da caixa) | reprova só com confiança **alta** | frente/traseira x lateral/diagonal | **não** distingue frente de traseira nem esquerda de direita; lateral x diagonal é sempre confiança baixa |
+
+O modo `?dev=1` mostra as métricas medidas e os limites de cada foto e a caixa do veículo. Ele também libera sliders para ajustar os limites ao vivo (a revisão mostra se cada foto "aprovaria" com os novos valores), além de "Exportar configuração ajustada", "Enviar arquivo" e "Forçar aceitar". O relatório (JSON, ou ZIP com as miniaturas) traz, por foto, o status, os motivos, os avisos, as métricas, as tentativas e os tempos de captura e de análise. Traz também um resumo de quantas vezes cada camada reprovou ou avisou. Os itens do modo dev estão marcados no código com `FASE 2: REMOVER`.
+
+**Limitações conhecidas:**
+- **Câmera:** precisa de HTTPS ou localhost.
+- **Resolução da foto:** no Safari, a foto sai do quadro do vídeo (até 1920×1080). No Chrome Android, `ImageCapture.takePhoto()` dá a resolução cheia.
+- **iPhone:**
+  - o sensor de inclinação só funciona depois do toque em "Ativar nível do celular";
+  - o iOS pode recarregar a aba em segundo plano, e é para isso que existe o IndexedDB;
+  - em aba anônima, o IndexedDB pode não existir: as fotos ficam só na memória.
+- **Detector:** o primeiro carregamento baixa cerca de 18 MB.
+- **CSP:** a página não libera `unsafe-eval`. O TF.js tenta WebAssembly num `try` e segue sem ele (o navegador registra uma recusa `wasm-eval`, esperada).
+
+**Possibilidade futura (não implementada):** OCR local do odômetro e do chassi com Tesseract.js. Seria só como conferência, nunca como critério: é pesado (cerca de 10 MB) e lê mal odômetro digital.
+
+**Fase 2 (não feita):**
+- cadastro do candidato e do veículo;
+- upload temporário com prazo de expiração;
+- `POST /veiculo/foto/cadastrar` (mapeando `codigoTipoSgaPendente` com `GET /listar/tipo-foto`);
+- `POST /cadastrar/vistoria`;
+- acompanhamento do status e conferência pelo colaborador no SGA;
+- rotas no `server/` com Turnstile e rate limit;
+- remoção dos itens `FASE 2: REMOVER`.
 
 ## 2ª via de boleto (SGA Hinova)
 
