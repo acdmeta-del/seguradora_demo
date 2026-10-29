@@ -74,7 +74,21 @@ body.v-modo-camera { overflow: hidden; }
 .v-disparador:disabled { opacity: .4; cursor: not-allowed; }
 .v-disparador:focus-visible { outline: 3px solid var(--color-brand); outline-offset: 3px; }
 .v-chip { min-height: 44px; padding: var(--space-2) var(--space-3); border: 1.5px solid rgba(255, 255, 255, .7); border-radius: var(--radius-pill); background: rgba(0, 0, 0, .45); color: #fff; font: inherit; font-size: var(--fs-sm); font-weight: 800; cursor: pointer; display: inline-flex; align-items: center; }
-.v-cam-topo .v-chip { margin-top: var(--space-2); border-color: var(--color-brand); }
+.v-cam-chips { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-top: var(--space-2); }
+.v-cam-topo .v-chip { min-height: 36px; border-color: var(--color-brand); }
+.v-chip--geo { cursor: default; border-color: #FFD54F !important; color: #FFD54F; }
+.v-chip--geo.v-chip--ok { border-color: var(--color-brand) !important; color: #fff; }
+.v-camera__erro--geo { top: auto; bottom: calc(env(safe-area-inset-bottom) + 170px); }
+
+/* Início: tipo de veículo e aviso de localização obrigatória */
+.v-tipos { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--space-2); margin: var(--space-4) 0; padding: 0; border: 0; }
+.v-tipos legend { margin-bottom: var(--space-2); font-weight: 800; }
+.v-tipo { position: relative; }
+.v-tipo input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; }
+.v-tipo span { display: grid; place-items: center; min-height: 56px; border: 2px solid var(--color-line); border-radius: var(--radius-md); background: #fff; font-weight: 900; }
+.v-tipo input:checked + span { border-color: var(--color-brand-text); background: var(--color-brand-tint); color: var(--color-brand-text); }
+.v-tipo input:focus-visible + span { outline: 3px solid var(--color-brand-text); outline-offset: 2px; }
+.v-obrigatorio { padding: var(--space-3); border-left: 6px solid #E0A100; border-radius: var(--radius-sm); background: #fff; }
 
 /* Tela deitada (sem trava de rotação): controles numa coluna à direita, como no app de câmera */
 @media (orientation: landscape) and (max-height: 560px) {

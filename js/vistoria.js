@@ -8,8 +8,8 @@
 (function () {
   "use strict";
 
-  const CFG = window.VISTORIA_CONFIG, Q = window.VistoriaQualidade, P = window.VistoriaPosicao;
-  if (!CFG || !Q || !P) return;
+  const CFG = window.VISTORIA_CONFIG, Q = window.VistoriaQualidade, P = window.VistoriaPosicao, K = window.VistoriaCarimbo;
+  if (!CFG || !Q || !P || !K) return;
 
   /* ---------- Utilidades ---------- */
   const $ = (sel, root = document) => root.querySelector(sel);
@@ -33,7 +33,16 @@
   }
   const salvarAjustes = () => { try { localStorage.setItem("vistoria-ajustes", JSON.stringify({ limites: L, camadas })); } catch { /* ignora */ } };
 
-  const slots = CFG.slots;
+  // Tipo de veículo (carro, moto, caminhão): define ângulos, silhuetas e classes esperadas
+  let tipoId = CFG.tipoPadrao, tipo = CFG.tipos[tipoId], slots = tipo.slots;
+  function definirTipo(id) {
+    if (!CFG.tipos[id]) return;
+    tipoId = id;
+    tipo = CFG.tipos[id];
+    slots = tipo.slots;
+    const radio = document.querySelector(`input[name="tipo"][value="${id}"]`);
+    if (radio) radio.checked = true;
+  }
   const estado = {
     indice: 0,
     fotos: new Map(),     // slotId → foto aceita (ou pulada)
@@ -41,7 +50,8 @@
     tentativas: {},       // slotId → nº de capturas
     inicioSlot: {},       // slotId → início do passo (tempo de captura)
     historico: [],        // cada tentativa: camadas que reprovaram/avisaram (para comparar camadas)
-    geo: false,
+    geoAtual: null,       // última posição do GPS (obrigatória para tirar foto)
+    geoErro: null,
     stream: null
   };
   const incl = P.criarInclinacao();
@@ -52,6 +62,7 @@
     telas: { inicio: $("#v-inicio"), captura: $("#v-captura"), resultado: $("#v-resultado"), revisao: $("#v-revisao") },
     video: $("#v-video"), guia: $("#v-guia"), silhueta: $("#v-silhueta"), camErro: $("#v-camera-erro"),
     nivel: $("#v-nivel"), nivelLinha: $("#v-nivel-linha"), nivelTexto: $("#v-nivel-texto"),
+    geoStatus: $("#v-geo-status"), geoErro: $("#v-geo-erro"),
     capturar: $("#v-capturar"), pular: $("#v-pular"), arquivo: $("#v-arquivo"), arquivoRotulo: $("#v-arquivo-rotulo"),
     orientacao: $("#v-orientacao-permitir"),
     previa: $("#v-previa-img"), caixa: $("#v-caixa"), status: $("#v-status"), metricas: $("#v-metricas"),
@@ -101,7 +112,7 @@
       salvarFoto: (f) => pedir("fotos", "readwrite", (s) => s.put(paraGuardar(f))),
       apagarFoto: (id) => pedir("fotos", "readwrite", (s) => s.delete(id)),
       fotos: () => pedir("fotos", "readonly", (s) => s.getAll()),
-      salvarMeta: () => pedir("meta", "readwrite", (s) => s.put({ salvaEm: Date.now(), tentativas: estado.tentativas, historico: estado.historico, inicioSlot: estado.inicioSlot }, "estado")),
+      salvarMeta: () => pedir("meta", "readwrite", (s) => s.put({ salvaEm: Date.now(), tipo: tipoId, tentativas: estado.tentativas, historico: estado.historico, inicioSlot: estado.inicioSlot }, "estado")),
       meta: () => pedir("meta", "readonly", (s) => s.get("estado")),
       limpar: () => Promise.all([pedir("fotos", "readwrite", (s) => s.clear()), pedir("meta", "readwrite", (s) => s.clear())])
     };
@@ -114,6 +125,7 @@
     const agora = Date.now();
     const meta = await banco.meta();
     if (meta && agora - meta.salvaEm < EXPIRA_MS) {
+      if (meta.tipo) definirTipo(meta.tipo);
       estado.tentativas = meta.tentativas || {};
       estado.historico = meta.historico || [];
       estado.inicioSlot = meta.inicioSlot || {};
@@ -179,7 +191,6 @@
       });
       el.video.srcObject = estado.stream;
       await el.video.play().catch(() => {});
-      el.capturar.disabled = false;
       return true;
     } catch (e) {
       erroCamera(MSG_CAMERA[e && e.name] || `Não foi possível abrir a câmera (${(e && e.name) || "erro"}).`);
@@ -191,6 +202,54 @@
     estado.stream.getTracks().forEach((t) => t.stop());
     estado.stream = null;
     el.video.srcObject = null;
+  }
+
+  /* ---------- Localização (OBRIGATÓRIA) ----------
+   * Sem uma posição recente do GPS (L.geoIdadeMaxS), o botão de foto fica desativado.
+   * A posição e o horário vão em cada foto (relatório) e o horário também no carimbo.
+   */
+  const MSG_GEO = {
+    1: "A localização é obrigatória e foi negada. No iPhone: Ajustes › Privacidade e Segurança › Serviços de Localização › Sites do Safari › “Durante o Uso”; depois, no Safari, toque em “aA” › Ajustes do Site › Localização › Permitir. No Android (Chrome): toque no cadeado ao lado do endereço › Permissões › Localização › Permitir. Depois, recarregue a página.",
+    2: "Não foi possível obter a localização. Ligue o GPS (Serviços de Localização) e vá para um lugar aberto.",
+    semSuporte: "Este navegador não fornece a localização, que é obrigatória. Use o Chrome (Android) ou o Safari (iPhone) atualizados."
+  };
+  const geoOk = () => Boolean(estado.geoAtual) && Date.now() - estado.geoAtual.recebidoEm <= L.geoIdadeMaxS * 1000;
+  function receberGeo(p) {
+    estado.geoAtual = {
+      lat: arred(p.coords.latitude, 6), lon: arred(p.coords.longitude, 6), precisaoM: Math.round(p.coords.accuracy),
+      gpsEm: p.timestamp, recebidoEm: Date.now()
+    };
+    estado.geoErro = null;
+    atualizarBotao();
+  }
+  function falhaGeo(e) {
+    // Tempo esgotado: continua tentando, sem mensagem de erro
+    if (e && e.code === 3) return atualizarBotao();
+    estado.geoErro = MSG_GEO[e && e.code] || MSG_GEO[2];
+    atualizarBotao();
+  }
+  let geoIniciado = false;
+  function iniciarGeo() {
+    if (!navigator.geolocation) { estado.geoErro = MSG_GEO.semSuporte; atualizarBotao(); return; }
+    if (geoIniciado) return;
+    geoIniciado = true;
+    navigator.geolocation.watchPosition(receberGeo, falhaGeo, { enableHighAccuracy: true, maximumAge: 10000, timeout: 30000 });
+    // Parado no mesmo lugar o GPS pode não mandar novidade: renova a posição de tempos em tempos
+    setInterval(() => {
+      if (!el.telas.captura.hidden && !document.hidden) navigator.geolocation.getCurrentPosition(receberGeo, falhaGeo, { enableHighAccuracy: true, maximumAge: 15000, timeout: 30000 });
+      atualizarBotao();
+    }, 20000);
+  }
+  // O botão de foto só funciona com câmera aberta E localização recente
+  function atualizarBotao() {
+    const ok = geoOk();
+    const g = estado.geoAtual;
+    el.geoStatus.textContent = ok ? `📍 Localização ok (±${g.precisaoM} m)` : estado.geoErro ? "📍 Sem localização" : "📍 Localizando…";
+    el.geoStatus.classList.toggle("v-chip--ok", ok);
+    el.geoErro.textContent = estado.geoErro || "";
+    el.geoErro.hidden = !estado.geoErro;
+    el.capturar.disabled = !(estado.stream && ok);
+    el.arquivo.disabled = !ok;
   }
 
   // Gira a imagem em ±90° (devolve um canvas, que serve de fonte para as medições)
@@ -244,7 +303,8 @@
     if (!camadas.silhueta) return;
     // Faixa de largura esperada do veículo (ângulos externos), como guia de distância
     const faixa = (f) => `<rect class="v-silhueta__faixa" x="${200 - f * 200}" y="8" width="${f * 400}" height="209" rx="6"/>`;
-    const guia = slot.externo ? faixa(L.larguraMax) + faixa(L.larguraMin) : "";
+    const [min, max] = slot.largura || [L.larguraMin, L.larguraMax];
+    const guia = slot.externo && slot.medida !== "maior" ? faixa(max) + faixa(min) : "";
     el.silhueta.innerHTML = `<svg viewBox="0 0 400 225" preserveAspectRatio="xMidYMid meet">${guia}<g class="v-silhueta__forma"${slot.espelhar ? ' transform="translate(400 0) scale(-1 1)"' : ""}>${SILHUETAS[slot.silhueta] || ""}</g></svg>`;
     posicionarGuia(true);
   }
@@ -313,8 +373,9 @@
     el.orientacao.hidden = !(camadas.inclinacao && slot.externo && incl.precisaPermissao() && !incl.ativo);
     if (incl.ultimo) atualizarNivel(incl.ultimo); else el.nivel.hidden = true;
     if (slot.externo && camadas.deteccao) prepararDetector();
-    // O botão fica desativado durante a análise da foto anterior: libera de novo aqui
-    el.capturar.disabled = !(await abrirCamera());
+    // O botão fica desativado durante a análise da foto anterior: libera de novo aqui (se houver GPS)
+    await abrirCamera();
+    atualizarBotao();
   }
 
   function prepararDetector() {
@@ -332,21 +393,24 @@
 
   async function capturar(origemArquivo) {
     const slot = slots[estado.indice];
+    if (!geoOk()) { atualizarBotao(); return; } // localização obrigatória
     el.capturar.disabled = true;
     el.status.textContent = "";
     try {
+      const quando = Date.now();                                    // horário do clique (carimbo)
+      const geo = { ...estado.geoAtual, idadeS: Math.round((quando - estado.geoAtual.recebidoEm) / 1000) };
       const inclinacao = incl.ultimo ? { ...incl.ultimo } : null; // no momento do clique
       const foto = origemArquivo ? await deArquivo(origemArquivo) : await tirarFoto(inclinacao);
       estado.tentativas[slot.id] = (estado.tentativas[slot.id] || 0) + 1;
       mostrarResultadoCarregando(slot);
-      estado.pendente = await analisar(foto, slot, inclinacao);
+      estado.pendente = await analisar(foto, slot, inclinacao, quando, geo);
       if (foto.fonte && foto.fonte.close) foto.fonte.close();
       avaliarEExibir();
       banco.salvarMeta();
     } catch (e) {
       erroCamera(e.message || "Não foi possível tirar a foto.");
-      el.capturar.disabled = false;
       mostrar("captura");
+      atualizarBotao();
     }
   }
 
@@ -366,16 +430,19 @@
   }
   const paraBlob = (canvas, qualidade) => new Promise((ok) => canvas.toBlob(ok, "image/jpeg", qualidade));
 
-  async function analisar({ fonte, largura, altura, origem, rotacao = 0 }, slot, inclinacao) {
+  async function analisar({ fonte, largura, altura, origem, rotacao = 0 }, slot, inclinacao, quando, geo) {
     const t0 = performance.now();
-    const blob = await paraBlob(canvasDe(fonte, largura, altura), CFG.camera.qualidadeJpeg);
+    // A foto guardada leva o carimbo (data e hora de Brasília + logo) numa faixa abaixo da imagem;
+    // as medições usam a imagem sem carimbo
+    const carimbo = await K.carimbar(canvasDe(fonte, largura, altura), largura, altura, quando, CFG.carimbo);
+    const blob = await paraBlob(carimbo.canvas, CFG.camera.qualidadeJpeg);
     const ca = canvasDe(fonte, largura, altura, CFG.analise.ladoMaior);
     const img = ca.getContext("2d", { willReadFrequently: true }).getImageData(0, 0, ca.width, ca.height);
     const medidas = Q.medir(img, { largura, altura });
     const foto = {
       slotId: slot.id, blob, url: URL.createObjectURL(blob), largura, altura, origem, rotacao,
-      capturadaEm: new Date().toISOString(), tentativa: estado.tentativas[slot.id],
-      medidas, inclinacao, deteccao: null, angulo: null, extensao: null, geo: null
+      tipo: tipoId, capturadaEm: new Date(quando).toISOString(), carimbo: carimbo.texto, tentativa: estado.tentativas[slot.id],
+      medidas, inclinacao, deteccao: null, angulo: null, extensao: null, geo
     };
     if (slot.externo && camadas.deteccao) {
       await prepararDetector();
@@ -385,16 +452,12 @@
         const cinza = Q.paraCinza(img);
         foto.medidas.hashCaixa = Q.dHash(cinza, { regiao: foto.deteccao.caixa });
         foto.medidas.hashCaixaEspelho = Q.dHash(cinza, { regiao: foto.deteccao.caixa, espelhar: true });
+        // Cor da carroceria: compara com as outras fotos (mesmo veículo?)
+        foto.medidas.cor = Q.assinaturaCor(img, foto.deteccao.caixa);
       }
     }
     foto.extensao = await P.analisarFoto({ canvas: ca, largura, altura, blob }, slot).catch(() => null);
     foto.tempoAnaliseMs = Math.round(performance.now() - t0);
-    if (estado.geo && navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition((p) => {
-        foto.geo = { lat: arred(p.coords.latitude, 6), lon: arred(p.coords.longitude, 6), precisaoM: Math.round(p.coords.accuracy), em: new Date(p.timestamp).toISOString() };
-        if (estado.fotos.get(slot.id) === foto) banco.salvarFoto(foto);
-      }, () => {}, { enableHighAccuracy: true, maximumAge: 60000, timeout: 10000 });
-    }
     return foto;
   }
 
@@ -413,8 +476,19 @@
       extras.maisParecida = r.maisPerto;
       juntar(r);
     }
+    if (camadas.mesmoVeiculo) {
+      const resumo = (f) => ({ cor: f.medidas && f.medidas.cor, classe: f.deteccao && f.deteccao.encontrado ? f.deteccao.classe : null, geo: f.geo, em: Date.parse(f.capturadaEm) });
+      const outras = [...estado.fotos.values()].filter((f) => f.slotId !== foto.slotId && ACEITAS.has(f.status)).map(resumo);
+      const r = Q.avaliarMesmoVeiculo(resumo(foto), outras, L);
+      extras.mesmoVeiculo = r.comparacao;
+      juntar(r);
+    }
+    // Localização obrigatória (sempre presente); precisão ruim só avisa
+    if (foto.geo && foto.geo.precisaoM > L.geoPrecisaoMaxM) {
+      avisos.push({ codigo: "precisao", texto: `Localização imprecisa (±${foto.geo.precisaoM} m): se puder, vá para um lugar mais aberto.`, camada: "geo" });
+    }
     if (camadas.espelho) {
-      const par = CFG.espelhos.find((p) => p.includes(foto.slotId));
+      const par = tipo.espelhos.find((p) => p.includes(foto.slotId));
       const outroId = par && par.find((id) => id !== foto.slotId);
       const outra = outroId && estado.fotos.get(outroId);
       if (outra && ACEITAS.has(outra.status) && outra.medidas) {
@@ -425,11 +499,11 @@
     }
     if (camadas.inclinacao) juntar(P.avaliarInclinacao(foto.inclinacao, slot, L));
     if (camadas.deteccao && slot.externo) {
-      if (foto.deteccao) juntar(P.avaliarEnquadramento(foto.deteccao, slot, L));
+      if (foto.deteccao) juntar(P.avaliarEnquadramento(foto.deteccao, slot, L, tipo));
       else if (detector.estado === "erro") avisos.push({ codigo: "detector_erro", texto: detector.erro, camada: "deteccao" });
     }
     if (camadas.angulo) {
-      foto.angulo = P.estimarAngulo(foto.deteccao, slot);
+      foto.angulo = P.estimarAngulo(foto.deteccao, slot, tipo.faixasAngulo, tipo);
       juntar(P.avaliarAngulo(foto.angulo, slot));
     }
     if (foto.extensao) juntar(foto.extensao);
@@ -501,10 +575,14 @@
       ["Lado repetido (direto/espelhado)", r.extras.espelho ? `${r.extras.espelho.direto} / ${r.extras.espelho.espelhado}${r.extras.espelho.usouCaixa ? " (recorte)" : ""}` : "—", `aviso se direto + ${L.espelhoMargem} ≤ espelhado`],
       ["Inclinação (pitch / roll)", i ? `${arred(i.pitch, 1)}° / ${arred(i.roll, 1)}°` : "sem sensor", `|pitch| ≤ ${L.pitchMax}°, |roll| ≤ ${L.rollMax}°`],
       ["Veículo", d ? (d.encontrado ? `${d.classe} ${arred(d.score)}` : "não encontrado") : "—", `score ≥ ${L.deteccaoScore}`],
-      ["Caixa (x, y, larg., alt.)", d && d.encontrado ? [d.caixa.x, d.caixa.y, d.caixa.w, d.caixa.h].map((v) => arred(v)).join(", ") : "—", `larg. ${L.larguraMin} a ${L.larguraMax}, centro ≤ ${L.centroMax}`],
+      ["Caixa (x, y, larg., alt.)", d && d.encontrado ? [d.caixa.x, d.caixa.y, d.caixa.w, d.caixa.h].map((v) => arred(v)).join(", ") : "—", (() => { const s0 = slots.find((x) => x.id === foto.slotId) || {}; const [a0, b0] = s0.largura || [L.larguraMin, L.larguraMax]; return `${s0.medida === "maior" ? "maior lado" : "larg."} ${a0} a ${b0}, centro ≤ ${L.centroMax}`; })()],
       ["Detecção (ms)", d ? d.tempoMs : "—", ""],
-      ["Ângulo estimado", a ? `${a.grupo} (prop. ${a.proporcao})` : "—", "frente/tras. < 1,42 < diagonal < 1,85; lateral ≥ 2,1"],
+      ["Ângulo estimado", a ? `${a.grupo} (prop. ${a.proporcao})` : "—", tipo.faixasAngulo.map((f) => `${f.grupo} < ${f.ate}`).join("; ")],
       ["Confiança do ângulo", a ? a.confianca : "—", "bloqueia só com alta"],
+      ["Localização", foto.geo ? `${foto.geo.lat}, ${foto.geo.lon} (±${foto.geo.precisaoM} m, ${foto.geo.idadeS} s)` : "—", `obrigatória, ≤ ${L.geoIdadeMaxS} s; aviso se > ${L.geoPrecisaoMaxM} m`],
+      ["Carimbo", foto.carimbo || "—", CFG.carimbo.rotuloFuso],
+      ["Mesmo veículo: cor (mediana)", r.extras.mesmoVeiculo && r.extras.mesmoVeiculo.corMediana != null ? r.extras.mesmoVeiculo.corMediana : "—", `aviso < ${L.corSemelhancaMin}`],
+      ["Mesmo veículo: distância / tempo", r.extras.mesmoVeiculo ? `${r.extras.mesmoVeiculo.distanciaM ?? "—"} m / ${r.extras.mesmoVeiculo.intervaloMin ?? "—"} min` : "—", `aviso > ${L.distanciaMaxM} m ou > ${L.intervaloMaxMin} min`],
       ["Análise total (ms)", foto.tempoAnaliseMs, ""],
       ["Tentativa", foto.tentativa, ""]
     ];
@@ -589,6 +667,7 @@
       aviso: "Relatório local de TESTE. Nenhuma foto foi enviada a servidor.",
       aparelho: { userAgent: navigator.userAgent, tela: `${screen.width}×${screen.height}@${window.devicePixelRatio}`, devMode: DEV },
       detector: { estado: detector.estado, erro: detector.erro || null, backend: detector.backend, tempoCargaMs: detector.tempoCargaMs },
+      tipoVeiculo: tipoId,
       configUsada: { versao: CFG.versao, limites: { ...L }, camadas: { ...camadas } },
       tentativasTotais: estado.historico.length,
       camadas: porCamada,
@@ -606,12 +685,16 @@
           tempoAnaliseMs: f.tempoAnaliseMs ?? null,
           origem: f.origem || null,
           rotacaoCorrigida: f.rotacao || 0,
-          metricas: f.medidas ? Object.fromEntries(Object.entries(f.medidas).map(([k, v]) => [k, arred(v, 3)])) : null,
+          metricas: f.medidas ? Object.fromEntries(Object.entries(f.medidas).filter(([k]) => k !== "cor").map(([k, v]) => [k, arred(v, 3)])) : null,
+          assinaturaCor: f.medidas && f.medidas.cor ? f.medidas.cor : null,
           inclinacao: f.inclinacao ? { pitch: arred(f.inclinacao.pitch, 1), roll: arred(f.inclinacao.roll, 1), paisagem: f.inclinacao.paisagem, quarto: f.inclinacao.quarto } : null,
           deteccao: f.deteccao || null,
           angulo: f.angulo || null,
           comparacoes: f.resultado ? f.resultado.extras : null,
-          geo: f.geo || null
+          carimbo: f.carimbo || null,
+          geo: f.geo ? { lat: f.geo.lat, lon: f.geo.lon, precisaoM: f.geo.precisaoM, idadeS: f.geo.idadeS, gpsEm: f.geo.gpsEm ? new Date(f.geo.gpsEm).toISOString() : null } : null,
+          // Relógio do aparelho x hora do GPS (diferença grande = relógio alterado?)
+          relogioDiferencaS: f.geo && f.geo.gpsEm ? Math.round((Date.parse(f.capturadaEm) - f.geo.gpsEm) / 1000) : null
         };
       }),
       historico: estado.historico
@@ -673,8 +756,8 @@
     baixar(zip(arquivos), nomeArquivo("zip"));
   }
 
-  async function limparTudo() {
-    if (!window.confirm("Apagar todas as fotos e o relatório deste teste?")) return;
+  async function limparTudo(pergunta) {
+    if (!window.confirm(typeof pergunta === "string" ? pergunta : "Apagar todas as fotos e o relatório deste teste?")) return false;
     for (const f of estado.fotos.values()) if (f.url) URL.revokeObjectURL(f.url);
     if (estado.pendente && estado.pendente.url) URL.revokeObjectURL(estado.pendente.url);
     estado.fotos.clear();
@@ -687,6 +770,7 @@
     $("#v-ir-revisao").hidden = true;
     $("#v-comecar").textContent = "Começar";
     mostrar("inicio");
+    return true;
   }
 
   /* ---------- Painel de diagnóstico (FASE 2: REMOVER) ---------- */
@@ -699,7 +783,7 @@
       if (!el.telas.revisao.hidden) renderRevisao();
       if (!el.telas.captura.hidden) renderSilhueta(slots[estado.indice]);
     };
-    const nomes = { qualidade: "Qualidade", duplicada: "Duplicada (aviso)", espelho: "Lado repetido (aviso)", silhueta: "Silhueta", inclinacao: "Inclinação", deteccao: "Detecção do veículo", angulo: "Ângulo estimado" };
+    const nomes = { qualidade: "Qualidade", mesmoVeiculo: "Mesmo veículo (aviso)", duplicada: "Duplicada (aviso)", espelho: "Lado repetido (aviso)", silhueta: "Silhueta", inclinacao: "Inclinação", deteccao: "Detecção do veículo", angulo: "Ângulo estimado" };
     $("#v-camadas").insertAdjacentHTML("beforeend", Object.keys(camadas).map((k) =>
       `<label class="v-check"><input type="checkbox" data-camada="${k}"${camadas[k] ? " checked" : ""}> ${esc(nomes[k] || k)}</label>`).join(""));
     $("#v-camadas").addEventListener("change", (e) => {
@@ -738,14 +822,21 @@
 
   /* ---------- Eventos ---------- */
   $("#v-comecar").addEventListener("click", async () => {
-    estado.geo = $("#v-geo").checked;
-    // Pedidos de permissão precisam vir de um toque (iOS): nível e localização aqui
+    // Pedidos de permissão precisam vir de um toque (iOS): nível e localização (obrigatória) aqui
     if (camadas.inclinacao) incl.pedirPermissao();
-    if (estado.geo && navigator.geolocation) navigator.geolocation.getCurrentPosition(() => {}, () => {}, { timeout: 10000 });
+    iniciarGeo();
     const i = proximoPendente(0);
     if (i < 0) { renderRevisao(); mostrar("revisao"); } else irPara(i);
   });
   $("#v-ir-revisao").addEventListener("click", () => { renderRevisao(); mostrar("revisao"); });
+  // Trocar o tipo de veículo com fotos já tiradas apaga o teste atual (os ângulos são outros)
+  $("#v-tipos").addEventListener("change", async (e) => {
+    const novo = e.target.value;
+    if (novo === tipoId) return;
+    if (estado.fotos.size && !(await limparTudo(`Trocar para ${CFG.tipos[novo].nome} apaga as fotos do teste atual. Continuar?`))) { definirTipo(tipoId); return; }
+    definirTipo(novo);
+    banco.salvarMeta();
+  });
   $("#v-ver-revisao").addEventListener("click", () => { renderRevisao(); mostrar("revisao"); });
   el.capturar.addEventListener("click", () => capturar());
   el.pular.addEventListener("click", pular);
@@ -755,6 +846,7 @@
     if (r !== "granted") avisar("Sem acesso ao sensor de inclinação: o nível do celular fica desligado.");
   });
   el.arquivo.addEventListener("change", () => { const f = el.arquivo.files[0]; el.arquivo.value = ""; if (DEV && f) capturar(f); });
+  $("#v-limpar").addEventListener("click", () => limparTudo());
   el.aceitar.addEventListener("click", () => aceitar(false));
   el.forcar.addEventListener("click", () => { if (DEV) aceitar(true); });
   el.refazer.addEventListener("click", refazer);
@@ -765,7 +857,6 @@
   });
   $("#v-relatorio").addEventListener("click", () => baixarJson(relatorio(), nomeArquivo("json")));
   $("#v-zip").addEventListener("click", baixarZip);
-  $("#v-limpar").addEventListener("click", limparTudo);
   document.addEventListener("visibilitychange", () => { if (document.hidden) pararCamera(); else if (!el.telas.captura.hidden) abrirCamera(); });
 
   if (DEV) initPainel();

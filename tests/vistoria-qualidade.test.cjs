@@ -6,7 +6,8 @@ global.window = {};
 require("../js/vistoria-config.js");
 const CFG = global.window.VISTORIA_CONFIG;
 const L = CFG.limites;
-const slot = (id) => CFG.slots.find((s) => s.id === id);
+const slot = (id) => Object.values(CFG.tipos).flatMap((t) => t.slots).find((s) => s.id === id);
+const CARRO = CFG.tipos.carro;
 
 // Imagem RGBA a partir de uma função de luminância (x, y) → 0–255
 function imagem(w, h, f) {
@@ -111,9 +112,55 @@ test("lado repetido: mesma lateral duas vezes avisa; lateral oposta (espelho) n�
   assert.equal(repetido.avisos[0].camada, "espelho");
 });
 
-test("configuração: todos os ângulos com codigoTipoSgaPendente nulo e limites com slider", () => {
-  assert.equal(CFG.slots.length, 11);
-  for (const s of CFG.slots) assert.equal(s.codigoTipoSgaPendente, null, s.id);
+test("configuração: três tipos, ids únicos, silhueta existente e codigoTipoSgaPendente nulo", () => {
+  global.self = {};
+  require("../js/vistoria-silhuetas.js");
+  const SIL = global.self.VistoriaSilhuetas;
+  assert.deepEqual(Object.keys(CFG.tipos), ["carro", "moto", "caminhao"]);
+  assert.equal(CARRO.slots.length, 11);
+  const ids = Object.values(CFG.tipos).flatMap((t) => t.slots.map((s) => s.id));
+  assert.equal(new Set(ids).size, ids.length, "ids únicos entre os tipos (IndexedDB)");
+  for (const [nome, t] of Object.entries(CFG.tipos)) {
+    for (const s of t.slots) {
+      assert.equal(s.codigoTipoSgaPendente, null, s.id);
+      assert.ok(SIL[s.silhueta], `silhueta ${s.silhueta} (${nome})`);
+      if (s.externo) assert.ok(["frente-traseira", "lateral", "diagonal"].includes(s.anguloEsperado), s.id);
+    }
+    for (const par of t.espelhos) for (const id of par) assert.ok(t.slots.some((s) => s.id === id), `${nome}: ${id}`);
+    assert.ok(t.classes.length && t.faixasAngulo.length, nome);
+  }
   for (const [chave] of CFG.ajustes) assert.ok(chave in L, chave);
-  for (const par of CFG.espelhos) for (const id of par) assert.ok(slot(id), id);
+});
+
+test("mesmo veículo: cor diferente, moto x carro, longe e muito depois avisam; o mesmo carro não", () => {
+  // Assinatura de cor de uma "carroceria" sintética
+  const corDe = (r, g, b) => {
+    const data = new Uint8ClampedArray(100 * 100 * 4);
+    for (let i = 0; i < data.length; i += 4) { const v = (i / 4) % 7 ? 0 : 12; data[i] = r - v; data[i + 1] = g - v; data[i + 2] = b - v; data[i + 3] = 255; }
+    return Q.assinaturaCor({ data, width: 100, height: 100 }, { x: 0, y: 0, w: 1, h: 1 });
+  };
+  const branco = corDe(235, 235, 235), brancoSombra = corDe(190, 192, 195), vermelho = corDe(180, 30, 30);
+  assert.ok(Q.semelhancaCor(branco, brancoSombra) >= L.corSemelhancaMin, "branco no sol x na sombra = mesma cor");
+  assert.ok(Q.semelhancaCor(branco, vermelho) < 0.3);
+  const base = { geo: { lat: -15.7939, lon: -47.8828 }, em: Date.UTC(2026, 9, 29, 14, 0), classe: "car" };
+  const outras = [{ ...base, cor: branco }, { ...base, cor: brancoSombra, em: base.em + 60000 }];
+  const codigos = (r) => r.avisos.map((a) => a.codigo);
+  assert.deepEqual(codigos(Q.avaliarMesmoVeiculo({ ...base, cor: branco, em: base.em + 120000 }, outras, L)), []);
+  assert.deepEqual(codigos(Q.avaliarMesmoVeiculo({ ...base, cor: vermelho }, outras, L)), ["cor"]);
+  assert.deepEqual(codigos(Q.avaliarMesmoVeiculo({ ...base, cor: branco, classe: "motorcycle" }, outras, L)), ["classe"]);
+  // ~1,1 km ao norte
+  const longe = Q.avaliarMesmoVeiculo({ ...base, cor: branco, geo: { lat: -15.7839, lon: -47.8828 } }, outras, L);
+  assert.deepEqual(codigos(longe), ["distancia"]);
+  assert.ok(Math.abs(longe.comparacao.distanciaM - 1112) < 10, String(longe.comparacao.distanciaM));
+  assert.match(longe.avisos[0].texto, /1112 m/);
+  assert.deepEqual(codigos(Q.avaliarMesmoVeiculo({ ...base, cor: branco, em: base.em + 90 * 60000 }, outras, L)), ["tempo"]);
+  assert.equal(longe.avisos[0].camada, "mesmoVeiculo");
+  // Sem outras fotos: nada a comparar
+  assert.deepEqual(Q.avaliarMesmoVeiculo({ ...base, cor: branco }, [], L).avisos, []);
+});
+
+test("carimbo: data e hora de Brasília no formato DD-MM-AAAA HH:MM:SS", () => {
+  const K = require("../js/vistoria-carimbo.js");
+  assert.equal(K.formatarDataHora(Date.UTC(2026, 9, 29, 14, 32, 5)), "29-10-2026 11:32:05");
+  assert.equal(K.formatarDataHora(Date.UTC(2027, 0, 1, 2, 3, 4)), "31-12-2026 23:03:04", "virada do dia em UTC-3");
 });

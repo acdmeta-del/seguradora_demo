@@ -109,21 +109,36 @@
       : { encontrado: false, quadro: { largura, altura } };
   }
 
-  function avaliarEnquadramento(det, slot, L) {
+  // Nome das classes do detector, para as mensagens
+  const NOME_CLASSE = { car: "um carro", truck: "um caminhão ou utilitário", bus: "um ônibus", motorcycle: "uma moto" };
+
+  /*
+   * Enquadramento do veículo. slot.largura = [mín, máx] (padrão: L.larguraMin/L.larguraMax);
+   * slot.medida "maior" usa o maior lado da caixa (moto de frente: alta e estreita).
+   * tipo (opcional): { classes, artigo } do VISTORIA_CONFIG.tipos; outra classe detectada só avisa.
+   */
+  function avaliarEnquadramento(det, slot, L, tipo) {
     if (!slot.externo || !det) return { erros: [], avisos: [] };
-    const erros = [];
+    const erros = [], avisos = [];
     const add = (codigo, texto) => erros.push(erro(codigo, texto, "deteccao"));
+    const nome = (tipo && tipo.artigo) || "o veículo";
     if (!det.encontrado || det.score < L.deteccaoScore) {
-      add("sem_veiculo", "Não encontrei o carro na foto: afaste-se até ele caber inteiro e tente de novo.");
-      return { erros, avisos: [] };
+      add("sem_veiculo", `Não encontrei ${nome} na foto: afaste-se até caber inteiro e tente de novo.`);
+      return { erros, avisos };
+    }
+    if (tipo && tipo.classes && !tipo.classes.includes(det.classe)) {
+      avisos.push(erro("outro_tipo", `A foto parece de ${NOME_CLASSE[det.classe] || det.classe}, mas esta vistoria é de ${nome.replace(/^(o|a) /, "")}.`, "deteccao"));
     }
     const c = det.caixa;
+    const [min, max] = slot.largura || [L.larguraMin, L.larguraMax];
+    const tamanho = slot.medida === "maior" ? Math.max(c.w, c.h) : c.w;
     const cortado = c.x < L.margemBorda || c.y < L.margemBorda || c.x + c.w > 1 - L.margemBorda || c.y + c.h > 1 - L.margemBorda;
-    if (c.w < L.larguraMin) add("pequeno", "O carro está pequeno na foto: chegue um pouco mais perto.");
-    else if (c.w > L.larguraMax || cortado) add("cortado", "O carro está cortado na borda: afaste-se um pouco até ele caber inteiro.");
+    const Nome = nome[0].toUpperCase() + nome.slice(1);
+    if (tamanho < min) add("pequeno", `${Nome} está pequeno na foto: chegue um pouco mais perto.`.replace(/^A (.*) pequeno/, "A $1 pequena"));
+    else if (tamanho > max || cortado) add("cortado", `${Nome} está cortado na borda: afaste-se um pouco até caber inteiro.`.replace(/^A (.*) cortado/, "A $1 cortada"));
     const dx = Math.abs(c.x + c.w / 2 - 0.5), dy = Math.abs(c.y + c.h / 2 - 0.5);
-    if (Math.max(dx, dy) > L.centroMax) add("descentralizado", "Centralize o carro no quadro.");
-    return { erros, avisos: [] };
+    if (Math.max(dx, dy) > L.centroMax) add("descentralizado", `Centralize ${nome} no quadro.`);
+    return { erros, avisos };
   }
 
   /*
@@ -179,27 +194,22 @@
   }
 
   /* ---------- 3. Estimativa de ângulo (heurística) ----------
-   * Só olha a proporção largura/altura da caixa do veículo, em pixels. Faixas calibradas no
-   * 1º teste real (hatch, iPhone, ~3 passos): frente 1,31, traseira 1,37, diagonais 1,46–1,58,
-   * laterais 2,36–2,45. Outros carros (sedã, picape, SUV) e distâncias mudam as faixas:
-   * recalibre com mais testes (o relatório traz a proporção de cada foto).
+   * Só olha a proporção largura/altura da caixa do veículo, em pixels, com as faixas de cada
+   * tipo (vistoria-config.js). Carro calibrado no 1º teste real (hatch, iPhone, ~3 passos):
+   * frente 1,31, traseira 1,37, diagonais 1,46–1,58, laterais 2,36–2,45. Moto e caminhão:
+   * estimativa inicial, sempre confiança baixa até calibrar (o relatório traz a proporção).
    * O que NÃO dá para saber assim: frente x traseira, esquerda x direita.
-   * Confiança alta só longe das fronteiras; perto delas, baixa. Moto: sempre baixa.
    */
-  const FAIXAS = [
-    // [até, grupo, alta se <= / >=, média entre]
-    { ate: 1.42, grupo: "frente-traseira", alta: (p) => p <= 1.3, baixa: (p) => p > 1.39 },
-    { ate: 1.85, grupo: "diagonal", alta: () => false, baixa: (p) => p < 1.45 || p > 1.75 },
-    { ate: 2.1, grupo: "indefinido", alta: () => false, baixa: () => true },
-    { ate: Infinity, grupo: "lateral", alta: (p) => p >= 2.5, baixa: (p) => p < 2.2 }
-  ];
-  function estimarAngulo(det, slot) {
-    if (!slot.externo || !slot.anguloEsperado || !det || !det.encontrado) return null;
+  // faixas: VISTORIA_CONFIG.tipos[tipo].faixasAngulo = [{ ate, grupo, alta: [de, ate], media: [de, ate] }]
+  const dentro = (p, f) => Boolean(f) && p >= f[0] && p < f[1];
+  function estimarAngulo(det, slot, faixas, tipo) {
+    if (!slot.externo || !slot.anguloEsperado || !det || !det.encontrado || !faixas) return null;
     const c = det.caixa, q = det.quadro;
     const proporcao = (c.w * q.largura) / Math.max(1, c.h * q.altura);
-    const faixa = FAIXAS.find((f) => proporcao < f.ate);
-    let confianca = faixa.alta(proporcao) ? "alta" : faixa.baixa(proporcao) ? "baixa" : "media";
-    if (det.classe === "motorcycle") confianca = "baixa"; // proporções de moto são outras
+    const faixa = faixas.find((f) => proporcao < f.ate) || faixas[faixas.length - 1];
+    let confianca = dentro(proporcao, faixa.alta) ? "alta" : dentro(proporcao, faixa.media) ? "media" : "baixa";
+    // Outro tipo de veículo na foto: as faixas não valem para ele
+    if (tipo && tipo.classes && !tipo.classes.includes(det.classe)) confianca = "baixa";
     const compativel = faixa.grupo === "indefinido" ? null : faixa.grupo === slot.anguloEsperado;
     return { proporcao: Math.round(proporcao * 100) / 100, grupo: faixa.grupo, confianca, compativel };
   }

@@ -34,8 +34,14 @@
     <section class="v-tela" id="v-inicio" aria-labelledby="v-inicio-titulo">
       <h1 id="v-inicio-titulo">Fotos da vistoria</h1>
       <p>Vamos guiar você foto por foto. Cada foto é conferida na hora: nitidez, luz e enquadramento.</p>
+      <fieldset class="v-tipos" id="v-tipos">
+        <legend>Qual veículo?</legend>
+        <label class="v-tipo"><input type="radio" name="tipo" value="carro" checked><span>Carro</span></label>
+        <label class="v-tipo"><input type="radio" name="tipo" value="moto"><span>Moto</span></label>
+        <label class="v-tipo"><input type="radio" name="tipo" value="caminhao"><span>Caminhão</span></label>
+      </fieldset>
+      <p class="v-obrigatorio"><strong>Localização obrigatória.</strong> Cada foto leva a data, a hora (de Brasília) e o local em que foi tirada. Ao começar, permita o acesso à localização e à câmera.</p>
       <p class="v-nota">Página de teste: as fotos ficam só neste aparelho, não são enviadas a ninguém e são apagadas sozinhas em algumas horas.</p>
-      <label class="v-check"><input type="checkbox" id="v-geo"> Registrar a localização no relatório (fica só neste aparelho)</label>
       <p class="v-retomada" id="v-retomada" hidden></p>
       <div class="v-acoes">
         <button class="btn btn--primary btn--block v-btn-grande" type="button" id="v-comecar">Começar</button>
@@ -56,10 +62,14 @@
           </div>
           <h2 id="v-slot-nome"></h2>
           <p class="v-instrucao" id="v-slot-instrucao"></p>
-          <button class="v-chip" type="button" id="v-orientacao-permitir" hidden>Ativar nível do celular</button>
+          <div class="v-cam-chips">
+            <span class="v-chip v-chip--geo" id="v-geo-status" role="status">Localizando…</span>
+            <button class="v-chip" type="button" id="v-orientacao-permitir" hidden>Ativar nível do celular</button>
+          </div>
         </div>
         <div class="v-nivel" id="v-nivel" hidden aria-live="polite"><span class="v-nivel__linha" id="v-nivel-linha"></span><span class="v-nivel__texto" id="v-nivel-texto"></span></div>
         <p class="v-camera__erro" id="v-camera-erro" hidden></p>
+        <p class="v-camera__erro v-camera__erro--geo" id="v-geo-erro" hidden></p>
         <div class="v-cam-base">
           <div class="v-cam-lado">
             <button class="v-chip" type="button" id="v-ver-revisao">Fotos</button>
@@ -120,6 +130,7 @@
   <script src="js/vistoria-qualidade.js"></script>
   <script src="js/vistoria-posicao.js"></script>
   <script src="js/vistoria-silhuetas.js"></script>
+  <script src="js/vistoria-carimbo.js"></script>
   <script src="js/vistoria.js"></script>
 </body>
 </html>

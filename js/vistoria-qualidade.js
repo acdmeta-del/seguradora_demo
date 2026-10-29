@@ -126,17 +126,21 @@
   // Mensagens específicas e acionáveis (PERSONALIZAR: textos)
   const MSG = {
     resolucao: (m) => `Resolução baixa (${m.largura}×${m.altura}). Use a câmera traseira e limpe a lente.`,
-    orientacao: () => "Gire o celular de lado (paisagem) para caber o carro inteiro.",
+    orientacao: () => "Gire o celular de lado (paisagem) para caber o veículo inteiro.",
     nitidez: () => "Foto tremida ou desfocada: apoie o celular, toque na tela para focar e tente de novo.",
     nitidezCentro: () => "Os números no centro não estão nítidos: aproxime um pouco e espere o foco.",
     escura: () => "Muito escuro: afaste-se da sombra ou acenda a luz.",
     clara: () => "Muito claro: evite o sol direto na lente.",
     estourados: () => "Reflexo forte (partes brancas): mude de posição até o brilho sumir.",
     escuros: () => "Muitas áreas pretas: falta luz em parte da foto.",
-    contraluz: () => "Contraluz: o sol está atrás do carro. Fotografe do outro lado ou com o sol às suas costas.",
+    contraluz: () => "Contraluz: o sol está atrás do veículo. Fotografe do outro lado ou com o sol às suas costas.",
     duplicada: (nome) => `Parece a mesma foto de “${nome}”. Confira se você mudou de ângulo.`,
     parecida: (nome) => `Muito parecida com “${nome}”. Confira se você mudou de ângulo.`,
-    espelho: (nome) => `Parece o mesmo lado de “${nome}”. Confira se fotografou o outro lado do carro.`
+    espelho: (nome) => `Parece o mesmo lado de “${nome}”. Confira se fotografou o outro lado do veículo.`,
+    outraCor: () => "A cor do veículo nesta foto não bate com as outras: confira se é o mesmo veículo.",
+    outraClasse: () => "Esta foto parece de outro tipo de veículo (moto x carro ou caminhão) que as anteriores.",
+    longe: (m) => `Esta foto foi tirada a uns ${m} m das outras: confira se é o mesmo veículo e o mesmo local.`,
+    demorou: (min) => `Esta foto foi tirada ${min} min depois da primeira: confira se é o mesmo veículo.`
   };
 
   const erro = (codigo, texto, camada = "qualidade") => ({ codigo, texto, camada });
@@ -190,5 +194,88 @@
     return { avisos: repetido ? [erro("espelho", MSG.espelho(nomePar), "espelho")] : [], comparacao: { ...comparacao, repetido } };
   }
 
-  return { paraCinza, nitidez, exposicao, dHash, hamming, medir, avaliarQualidade, avaliarDuplicada, avaliarEspelho, MSG, CENTRO };
+  /* ---------- Mesmo veículo em todas as fotos ----------
+   * Sinais independentes, todos só AVISAM: cor da carroceria, tipo detectado (moto x 4 rodas),
+   * distância entre os pontos de GPS e tempo desde a primeira foto. Nenhum pega dois veículos
+   * iguais (mesma cor, mesmo lugar); para isso, só lendo a placa (possibilidade futura).
+   */
+
+  // Histograma de cor da faixa da carroceria abaixo dos vidros (45–85% da altura da caixa):
+  // 5 tons neutros (preto → branco) + 8 matizes x 2 brilhos = 21 caixas, somando 1.
+  function assinaturaCor(img, caixa) {
+    if (!caixa) return null;
+    const { data, width, height } = img;
+    const x0 = Math.max(0, Math.floor((caixa.x + caixa.w * 0.15) * width)), x1 = Math.min(width, Math.ceil((caixa.x + caixa.w * 0.85) * width));
+    const y0 = Math.max(0, Math.floor((caixa.y + caixa.h * 0.45) * height)), y1 = Math.min(height, Math.ceil((caixa.y + caixa.h * 0.85) * height));
+    const h = new Array(21).fill(0);
+    let n = 0;
+    for (let y = y0; y < y1; y += 2) {
+      for (let x = x0; x < x1; x += 2) {
+        const i = (y * width + x) * 4, r = data[i], g = data[i + 1], b = data[i + 2];
+        const max = Math.max(r, g, b), min = Math.min(r, g, b), v = max / 255, sat = max ? (max - min) / max : 0;
+        if (sat < 0.22 || v < 0.15) h[Math.min(4, Math.floor(v * 5))]++;
+        else {
+          const d = max - min;
+          let matiz = max === r ? ((g - b) / d) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+          matiz = (matiz * 60 + 360) % 360;
+          h[5 + Math.floor(matiz / 45) * 2 + (v > 0.6 ? 1 : 0)]++;
+        }
+        n++;
+      }
+    }
+    return n ? h.map((c) => Math.round((c / n) * 1000) / 1000) : null;
+  }
+
+  // Semelhança 0–1 (interseção de histogramas). Tons neutros vizinhos também contam:
+  // branco na sombra vira cinza-claro e não deve parecer outro carro.
+  function semelhancaCor(a, b) {
+    if (!a || !b) return null;
+    const suave = (h) => h.map((v, i) => (i < 5 ? v + (h[i - 1] || 0) * (i > 0) + (h[i + 1] || 0) * (i < 4) : v));
+    const sa = suave(a), sb = suave(b);
+    const total = (h) => h.reduce((s, v) => s + v, 0);
+    const ta = total(sa), tb = total(sb);
+    return sa.reduce((s, v, i) => s + Math.min(v / ta, sb[i] / tb), 0);
+  }
+
+  // Distância em metros entre dois pontos { lat, lon } (haversine)
+  function distanciaM(a, b) {
+    if (!a || !b) return null;
+    const r = (g) => (g * Math.PI) / 180, R = 6371000;
+    const dLat = r(b.lat - a.lat), dLon = r(b.lon - a.lon);
+    const x = Math.sin(dLat / 2) ** 2 + Math.cos(r(a.lat)) * Math.cos(r(b.lat)) * Math.sin(dLon / 2) ** 2;
+    return 2 * R * Math.asin(Math.min(1, Math.sqrt(x)));
+  }
+  const mediana = (v) => { const s = [...v].sort((x, y) => x - y); const m = s.length >> 1; return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; };
+  const grupoClasse = (c) => (c ? (c === "motorcycle" ? "moto" : "4rodas") : null);
+
+  /*
+   * atual/outras: { nome, cor, classe, geo: { lat, lon }, em: ms }
+   * Devolve avisos (camada "mesmoVeiculo") e as medidas usadas, para o relatório.
+   */
+  function avaliarMesmoVeiculo(atual, outras, L) {
+    const avisos = [], comparacao = {};
+    const aviso = (codigo, texto) => avisos.push(erro(codigo, texto, "mesmoVeiculo"));
+    const sims = outras.map((o) => semelhancaCor(atual.cor, o.cor)).filter((v) => v != null);
+    if (sims.length) {
+      comparacao.corMediana = Math.round(mediana(sims) * 100) / 100;
+      if (comparacao.corMediana < L.corSemelhancaMin) aviso("cor", MSG.outraCor());
+    }
+    const grupos = outras.map((o) => grupoClasse(o.classe)).filter(Boolean);
+    const g = grupoClasse(atual.classe);
+    if (g && grupos.length && grupos.filter((x) => x !== g).length > grupos.length / 2) aviso("classe", MSG.outraClasse());
+    const comGeo = outras.filter((o) => o.geo);
+    if (atual.geo && comGeo.length) {
+      const centro = { lat: mediana(comGeo.map((o) => o.geo.lat)), lon: mediana(comGeo.map((o) => o.geo.lon)) };
+      comparacao.distanciaM = Math.round(distanciaM(atual.geo, centro));
+      if (comparacao.distanciaM > L.distanciaMaxM) aviso("distancia", MSG.longe(comparacao.distanciaM));
+    }
+    const tempos = outras.map((o) => o.em).filter(Number.isFinite);
+    if (Number.isFinite(atual.em) && tempos.length) {
+      comparacao.intervaloMin = Math.round(Math.abs(atual.em - Math.min(...tempos)) / 60000);
+      if (comparacao.intervaloMin > L.intervaloMaxMin) aviso("tempo", MSG.demorou(comparacao.intervaloMin));
+    }
+    return { avisos, comparacao };
+  }
+
+  return { paraCinza, nitidez, exposicao, dHash, hamming, medir, avaliarQualidade, avaliarDuplicada, avaliarEspelho, assinaturaCor, semelhancaCor, distanciaM, avaliarMesmoVeiculo, MSG, CENTRO };
 });

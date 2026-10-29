@@ -15,6 +15,7 @@ window.VISTORIA_CONFIG = {
   camadas: {
     qualidade: true,   // resolução, nitidez, exposição, orientação
     duplicada: true,   // hash perceptual entre fotos (só avisa)
+    mesmoVeiculo: true, // cor, tipo, distância e tempo entre as fotos: outro veículo? (só avisa)
     espelho: true,     // laterais e diagonais: pega o mesmo lado fotografado duas vezes (só avisa)
     silhueta: true,    // guia visual sobre a câmera
     inclinacao: true,  // celular reto (DeviceOrientationEvent)
@@ -47,7 +48,14 @@ window.VISTORIA_CONFIG = {
     larguraMin: 0.5,         // largura da caixa do veículo / largura do quadro (1º teste: 0,57–0,87)
     larguraMax: 0.9,
     centroMax: 0.15,         // distância do centro da caixa ao centro do quadro
-    margemBorda: 0.02        // caixa encostada na borda = veículo cortado
+    margemBorda: 0.02,       // caixa encostada na borda = veículo cortado
+    // Localização e horário (obrigatórios): sem posição recente, a foto não é tirada
+    geoIdadeMaxS: 120,       // posição do GPS com no máximo N segundos
+    geoPrecisaoMaxM: 100,    // precisão pior que isso: só avisa
+    // Mesmo veículo em todas as fotos (só avisam)
+    corSemelhancaMin: 0.6,   // 1º teste: mesmo carro 0,71–0,99; cinza-escuro ~0,49; vermelho/azul ~0,28 (prata x branco não separa)
+    distanciaMaxM: 150,      // foto longe das outras
+    intervaloMaxMin: 45      // foto muito depois da primeira
   },
 
   // Sliders do painel dev: [chave, rótulo, mínimo, máximo, passo]
@@ -70,36 +78,63 @@ window.VISTORIA_CONFIG = {
     ["larguraMin", "Veículo: largura mínima", 0.2, 0.9, 0.01],
     ["larguraMax", "Veículo: largura máxima", 0.5, 1, 0.01],
     ["centroMax", "Veículo: distância do centro", 0.02, 0.5, 0.01],
-    ["margemBorda", "Veículo: margem da borda", 0, 0.1, 0.005]
+    ["margemBorda", "Veículo: margem da borda", 0, 0.1, 0.005],
+    ["geoIdadeMaxS", "GPS: idade máxima da posição (s)", 10, 600, 10],
+    ["geoPrecisaoMaxM", "GPS: precisão para aviso (m)", 10, 500, 10],
+    ["corSemelhancaMin", "Mesmo veículo: semelhança de cor mínima", 0.2, 0.95, 0.05],
+    ["distanciaMaxM", "Mesmo veículo: distância máxima (m)", 20, 2000, 10],
+    ["intervaloMaxMin", "Mesmo veículo: intervalo máximo (min)", 5, 240, 5]
   ],
+
+  // Carimbo no rodapé de cada foto. PERSONALIZAR: logo (versão clara, fundo transparente)
+  carimbo: {
+    logo: "assets/carimbo-logo.svg",
+    fuso: "America/Sao_Paulo",       // horário de Brasília
+    rotuloFuso: "Horário de Brasília",
+    alturaRelativa: 0.045            // altura da faixa / lado maior da foto
+  },
 
   // Detector local (js/vendor + assets/modelos): nenhuma imagem sai do aparelho
   deteccao: {
-    classes: ["car", "truck", "motorcycle"],
+    // Todas as classes de veículo do COCO: cada tipo diz quais espera (o resto vira aviso)
+    classes: ["car", "truck", "bus", "motorcycle"],
     base: "lite_mobilenet_v2",
     modelUrl: "assets/modelos/coco-ssd-lite/model.json"
   },
 
-  // Pares que devem ser o espelho um do outro (lado esquerdo x direito)
-  espelhos: [
-    ["lateral-esquerda", "lateral-direita"],
-    ["diagonal-frontal-esquerda", "diagonal-frontal-direita"],
-    ["diagonal-traseira-esquerda", "diagonal-traseira-direita"]
-  ],
-
   /*
-   * Ângulos, na ordem da captura.
-   *   silhueta: frente | traseira | lateral | diagonal-frontal | diagonal-traseira | painel | chassi | portamalas
-   *   espelhar: inverte a silhueta (lado direito)
+   * Tipos de veículo. Cada um tem a lista de ângulos, os pares espelhados, as classes do
+   * detector que espera e as faixas da heurística de ângulo (proporção largura/altura da caixa).
+   *   faixasAngulo: [{ ate, grupo, alta: [de, ate], media: [de, ate] }]. Fora de alta/media = baixa.
+   *   Moto e caminhão ainda NÃO calibrados (sem alta/media): o ângulo só avisa, nunca bloqueia.
+   * Campos dos ângulos:
+   *   silhueta: nome em js/vistoria-silhuetas.js · espelhar: inverte a silhueta (lado direito)
    *   externo: aplica detecção do veículo e enquadramento
    *   anguloEsperado: frente-traseira | lateral | diagonal (heurística da camada "angulo")
-   *   legibilidade: exige nitidez também no centro da foto
-   *   opcional: pode ser pulado ("se aplicável")
+   *   largura: [mín, máx] do veículo no quadro (padrão: limites larguraMin/larguraMax)
+   *   medida: "largura" (padrão) ou "maior" (maior lado da caixa: moto de frente/traseira)
+   *   legibilidade: exige nitidez também no centro · opcional: pode ser pulado
    *   codigoTipoSgaPendente: código do tipo de foto no SGA (Fase 2)
-   * OCR (possibilidade futura, não implementado): ler odômetro e chassi no próprio
-   * aparelho com Tesseract.js, só como conferência, nunca como critério de aprovação.
+   * OCR (possibilidade futura, não implementado): ler odômetro, chassi e placa no próprio
+   * aparelho, só como conferência, nunca como critério de aprovação.
    */
-  slots: [
+  tipoPadrao: "carro",
+  tipos: {
+    carro: {
+      nome: "Carro", artigo: "o carro",
+      classes: ["car", "truck"], // picape e SUV às vezes saem como "truck"
+      faixasAngulo: [
+        { ate: 1.42, grupo: "frente-traseira", alta: [0, 1.3], media: [1.3, 1.39] },
+        { ate: 1.85, grupo: "diagonal", media: [1.45, 1.75] },
+        { ate: 2.1, grupo: "indefinido" },
+        { ate: 99, grupo: "lateral", alta: [2.5, 99], media: [2.2, 2.5] }
+      ],
+      espelhos: [
+        ["lateral-esquerda", "lateral-direita"],
+        ["diagonal-frontal-esquerda", "diagonal-frontal-direita"],
+        ["diagonal-traseira-esquerda", "diagonal-traseira-direita"]
+      ],
+      slots: [
     { id: "frente", nome: "Frente", silhueta: "frente", orientacao: "paisagem", externo: true, anguloEsperado: "frente-traseira",
       instrucao: "Fique de frente para o carro, a uns 3 passos. O carro inteiro e a placa devem caber no quadro.", codigoTipoSgaPendente: null },
     { id: "traseira", nome: "Traseira", silhueta: "traseira", orientacao: "paisagem", externo: true, anguloEsperado: "frente-traseira",
@@ -122,5 +157,81 @@ window.VISTORIA_CONFIG = {
       instrucao: "Se aplicável: aproxime da gravação do chassi ou da plaqueta. Os caracteres devem ficar no centro e nítidos.", codigoTipoSgaPendente: null },
     { id: "estepe-portamalas", nome: "Estepe e porta-malas", silhueta: "portamalas", orientacao: "qualquer", externo: false,
       instrucao: "Abra o porta-malas e mostre o estepe e o espaço interno.", codigoTipoSgaPendente: null }
-  ]
+      ]
+    },
+
+    moto: {
+      nome: "Moto", artigo: "a moto",
+      classes: ["motorcycle"],
+      faixasAngulo: [ // estimativa inicial, sem calibrar
+        { ate: 0.8, grupo: "frente-traseira" },
+        { ate: 1.35, grupo: "diagonal" },
+        { ate: 1.55, grupo: "indefinido" },
+        { ate: 99, grupo: "lateral" }
+      ],
+      espelhos: [["moto-lateral-esquerda", "moto-lateral-direita"]],
+      slots: [
+        { id: "moto-frente", nome: "Frente", silhueta: "moto-frente", orientacao: "qualquer", externo: true, anguloEsperado: "frente-traseira", medida: "maior", largura: [0.55, 0.92],
+          instrucao: "Fique de frente para a moto, a uns 2 passos. Pegue do pneu ao retrovisor. Pode ser com o celular em pé.", codigoTipoSgaPendente: null },
+        { id: "moto-traseira", nome: "Traseira", silhueta: "moto-traseira", orientacao: "qualquer", externo: true, anguloEsperado: "frente-traseira", medida: "maior", largura: [0.55, 0.92],
+          instrucao: "Vá para trás da moto, a uns 2 passos. A placa e a lanterna devem aparecer.", codigoTipoSgaPendente: null },
+        { id: "moto-lateral-esquerda", nome: "Lateral esquerda", silhueta: "moto-lateral", orientacao: "paisagem", externo: true, anguloEsperado: "lateral", largura: [0.5, 0.92],
+          instrucao: "Do lado esquerdo, afaste-se até a moto caber inteira, de uma roda à outra.", codigoTipoSgaPendente: null },
+        { id: "moto-lateral-direita", nome: "Lateral direita", silhueta: "moto-lateral", espelhar: true, orientacao: "paisagem", externo: true, anguloEsperado: "lateral", largura: [0.5, 0.92],
+          instrucao: "Do lado direito (do escapamento, na maioria), afaste-se até a moto caber inteira.", codigoTipoSgaPendente: null },
+        { id: "moto-diagonal-frontal-esquerda", nome: "Diagonal frontal esquerda", silhueta: "moto-diagonal-frontal", orientacao: "paisagem", externo: true, anguloEsperado: "diagonal", largura: [0.4, 0.92],
+          instrucao: "Na quina da frente, do lado esquerdo. Pegue a frente e a lateral juntas.", codigoTipoSgaPendente: null },
+        { id: "moto-diagonal-traseira-direita", nome: "Diagonal traseira direita", silhueta: "moto-diagonal-traseira", espelhar: true, orientacao: "paisagem", externo: true, anguloEsperado: "diagonal", largura: [0.4, 0.92],
+          instrucao: "Na quina de trás, do lado direito. Pegue a traseira e a lateral juntas.", codigoTipoSgaPendente: null },
+        { id: "moto-painel", nome: "Painel com odômetro", silhueta: "moto-painel", orientacao: "qualquer", externo: false, legibilidade: true,
+          instrucao: "Com a moto ligada, enquadre o painel. A quilometragem deve ficar no centro e legível.", codigoTipoSgaPendente: null },
+        { id: "moto-chassi", nome: "Chassi", silhueta: "chassi", orientacao: "qualquer", externo: false, legibilidade: true,
+          instrucao: "Aproxime da gravação do chassi (no quadro, perto da coluna de direção). Os caracteres devem ficar nítidos.", codigoTipoSgaPendente: null },
+        { id: "moto-motor", nome: "Número do motor", silhueta: "motor", orientacao: "qualquer", externo: false, legibilidade: true,
+          instrucao: "Aproxime da gravação do número do motor, no bloco. Os caracteres devem ficar nítidos.", codigoTipoSgaPendente: null }
+      ]
+    },
+
+    caminhao: {
+      nome: "Caminhão", artigo: "o caminhão",
+      classes: ["truck", "bus"],
+      faixasAngulo: [ // estimativa inicial, sem calibrar (muda muito com cavalo, baú e carreta)
+        { ate: 1.25, grupo: "frente-traseira" },
+        { ate: 2.0, grupo: "diagonal" },
+        { ate: 2.3, grupo: "indefinido" },
+        { ate: 99, grupo: "lateral" }
+      ],
+      espelhos: [
+        ["caminhao-lateral-esquerda", "caminhao-lateral-direita"],
+        ["caminhao-diagonal-frontal-esquerda", "caminhao-diagonal-frontal-direita"],
+        ["caminhao-diagonal-traseira-esquerda", "caminhao-diagonal-traseira-direita"]
+      ],
+      slots: [
+        { id: "caminhao-frente", nome: "Frente", silhueta: "caminhao-frente", orientacao: "paisagem", externo: true, anguloEsperado: "frente-traseira", largura: [0.4, 0.9],
+          instrucao: "De frente para a cabine, a uns 5 passos. Pegue a cabine inteira, do teto ao para-choque, e a placa.", codigoTipoSgaPendente: null },
+        { id: "caminhao-traseira", nome: "Traseira", silhueta: "caminhao-traseira", orientacao: "paisagem", externo: true, anguloEsperado: "frente-traseira", largura: [0.4, 0.9],
+          instrucao: "Atrás do caminhão, a uns 5 passos. Pegue a traseira inteira, as lanternas e a placa.", codigoTipoSgaPendente: null },
+        { id: "caminhao-lateral-esquerda", nome: "Lateral esquerda", silhueta: "caminhao-lateral", orientacao: "paisagem", externo: true, anguloEsperado: "lateral", largura: [0.6, 0.96],
+          instrucao: "Lado do motorista. Afaste-se até caber o caminhão inteiro, da cabine à traseira.", codigoTipoSgaPendente: null },
+        { id: "caminhao-lateral-direita", nome: "Lateral direita", silhueta: "caminhao-lateral", espelhar: true, orientacao: "paisagem", externo: true, anguloEsperado: "lateral", largura: [0.6, 0.96],
+          instrucao: "Lado do passageiro. Afaste-se até caber o caminhão inteiro, da cabine à traseira.", codigoTipoSgaPendente: null },
+        { id: "caminhao-diagonal-frontal-esquerda", nome: "Diagonal frontal esquerda", silhueta: "caminhao-diagonal-frontal", orientacao: "paisagem", externo: true, anguloEsperado: "diagonal", largura: [0.5, 0.94],
+          instrucao: "Na quina da cabine, do lado do motorista. Pegue a frente e a lateral juntas.", codigoTipoSgaPendente: null },
+        { id: "caminhao-diagonal-frontal-direita", nome: "Diagonal frontal direita", silhueta: "caminhao-diagonal-frontal", espelhar: true, orientacao: "paisagem", externo: true, anguloEsperado: "diagonal", largura: [0.5, 0.94],
+          instrucao: "Na quina da cabine, do lado do passageiro. Pegue a frente e a lateral juntas.", codigoTipoSgaPendente: null },
+        { id: "caminhao-diagonal-traseira-esquerda", nome: "Diagonal traseira esquerda", silhueta: "caminhao-diagonal-traseira", orientacao: "paisagem", externo: true, anguloEsperado: "diagonal", largura: [0.5, 0.94],
+          instrucao: "Na quina de trás, do lado do motorista. Pegue a traseira e a lateral juntas.", codigoTipoSgaPendente: null },
+        { id: "caminhao-diagonal-traseira-direita", nome: "Diagonal traseira direita", silhueta: "caminhao-diagonal-traseira", espelhar: true, orientacao: "paisagem", externo: true, anguloEsperado: "diagonal", largura: [0.5, 0.94],
+          instrucao: "Na quina de trás, do lado do passageiro. Pegue a traseira e a lateral juntas.", codigoTipoSgaPendente: null },
+        { id: "caminhao-painel", nome: "Painel com odômetro", silhueta: "painel", orientacao: "qualquer", externo: false, legibilidade: true,
+          instrucao: "Com o motor ligado, enquadre o painel. A quilometragem deve ficar no centro e legível.", codigoTipoSgaPendente: null },
+        { id: "caminhao-chassi", nome: "Chassi", silhueta: "chassi", orientacao: "qualquer", externo: false, legibilidade: true,
+          instrucao: "Aproxime da gravação do chassi (longarina) ou da plaqueta. Os caracteres devem ficar nítidos.", codigoTipoSgaPendente: null },
+        { id: "caminhao-carroceria", nome: "Carroceria ou implemento", silhueta: "carroceria", orientacao: "paisagem", externo: false,
+          instrucao: "Mostre a carroceria ou o implemento (baú, grade, tanque, basculante) e o estado da lona ou das portas.", codigoTipoSgaPendente: null },
+        { id: "caminhao-pneus", nome: "Pneus e eixos", silhueta: "pneu", orientacao: "qualquer", externo: false,
+          instrucao: "Aproxime dos pneus de um eixo traseiro: a banda de rodagem deve aparecer nítida.", codigoTipoSgaPendente: null }
+      ]
+    }
+  }
 };

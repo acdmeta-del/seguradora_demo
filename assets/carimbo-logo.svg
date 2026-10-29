@@ -1,0 +1,7 @@
+<!-- PERSONALIZAR: PROVISÓRIO. Troque pelo logo oficial (versão clara, fundo transparente), mantendo o nome do arquivo.
+     Usado no carimbo do rodapé das fotos da vistoria (faixa escura). -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 60" width="240" height="60">
+  <rect x="2" y="8" width="44" height="44" rx="10" fill="none" stroke="#98C61D" stroke-width="5"/>
+  <path d="M14 42l10-24 10 24M18 34h12" fill="none" stroke="#FFFFFF" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="58" y="42" fill="#FFFFFF" font-family="Nunito, Arial, sans-serif" font-size="32" font-weight="800">acadmeta</text>
+</svg>

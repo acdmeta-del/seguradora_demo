@@ -74,13 +74,20 @@ compatibilidade da CSP com o diálogo e com `fetch`.
 - **Celular:** abra o endereço acima. A câmera e a localização exigem HTTPS, que o GitHub Pages já fornece.
 - **Computador:** `npx http-server -p 8080` (ou outro servidor estático) e `http://localhost:8080/vistoria-teste.html?dev=1`. `localhost` conta como endereço seguro. Por IP da rede (`http://192.168...`) a câmera **não** abre: use um túnel HTTPS ou o GitHub Pages.
 
+**Tipos de veículo:** carro (11 ângulos), moto (9: inclui número do motor) e caminhão (12: inclui carroceria/implemento e pneus/eixos), escolhidos na tela inicial. Cada tipo tem silhuetas, classes do detector e faixas de ângulo próprias (`tipos` em `js/vistoria-config.js`). Moto e caminhão ainda não foram calibrados: o ângulo só avisa.
+
+**Localização e horário obrigatórios:** sem uma posição do GPS com até 2 minutos (`geoIdadeMaxS`), o botão de foto fica desativado; com a permissão negada, a página explica como liberar no iPhone e no Android. Cada foto guarda latitude, longitude, precisão e a diferença entre o relógio do aparelho e a hora do GPS (relógio alterado aparece no relatório).
+
+**Carimbo:** a foto guardada ganha uma faixa embaixo com data e hora de Brasília (`DD-MM-AAAA HH:MM:SS`) e o logo (`assets/carimbo-logo.svg`, **provisório**: trocar pelo oficial). A faixa fica abaixo da imagem, sem cobrir o veículo, e as medições usam a foto sem carimbo. A hora vem do relógio do aparelho: na Fase 2, conferir com a hora do servidor.
+
 | Arquivo | Papel |
 |---|---|
 | `js/vistoria-config.js` | Ângulos (com `codigoTipoSgaPendente: null` para a Fase 2), limites, camadas ligáveis, faixas dos sliders |
 | `js/vistoria-qualidade.js` | Funções puras: resolução, nitidez (variância do Laplaciano), exposição, contraluz, dHash, duplicada, lado repetido |
 | `js/vistoria-posicao.js` | Nível do celular, detector COCO-SSD, enquadramento, estimativa de ângulo e o ponto de extensão `analisarFoto(imagem, slot)` |
 | `js/vistoria.js` | Interface: câmera, fluxo, revisão, painel dev, relatório JSON/ZIP, IndexedDB com expiração |
-| `js/vistoria-silhuetas.js` | Silhuetas em traço de cada ângulo (frente, traseira, lateral, diagonais, painel, chassi, porta-malas) |
+| `js/vistoria-silhuetas.js` | Silhuetas em traço de cada ângulo: carro, moto e caminhão, painel, chassi, motor, porta-malas, carroceria, pneus |
+| `js/vistoria-carimbo.js` | Carimbo do rodapé (data e hora de Brasília + logo) |
 | `css/vistoria.css` | Visual mobile first: câmera em tela cheia com o disparador dentro da imagem (coluna à direita com a tela deitada), botões grandes, contraste para uso no sol |
 | `js/vendor/tf-4.22.0.min.js`, `js/vendor/coco-ssd-2.2.3.min.js`, `assets/modelos/coco-ssd-lite/` | Detector **local** (~18 MB, baixado só no primeiro ângulo externo). Origem e SHA-256 no `LEIA-ME.md` do modelo |
 
@@ -91,6 +98,7 @@ compatibilidade da CSP com o diálogo e com `fetch`.
 | Qualidade | reprova | foto tremida ou fora de foco, muito escura ou clara, reflexo forte, resolução baixa, celular em pé nos ângulos externos | a nitidez muda com o aparelho e a textura do carro (carro liso e limpo mede menos): calibre com os sliders |
 | Contraluz | reprova | sol atrás do carro (centro bem mais escuro que as bordas) | carro escuro em fundo claro também cai aqui |
 | Legibilidade (odômetro, chassi) | reprova | centro desfocado | não lê os números (o OCR fica para depois, ver abaixo) |
+| Mesmo veículo | **só avisa** | cor da carroceria diferente das outras fotos (mesmo carro 0,71–0,99; cor diferente ≤ 0,6), moto x carro/caminhão, foto a mais de 150 m das outras, mais de 45 min depois da primeira | não separa dois veículos da mesma cor no mesmo lugar (nem branco x prata): só lendo a placa |
 | Duplicada (dHash) | **só avisa** | a mesma foto repetida | fundo igual com pouca diferença pode avisar à toa |
 | Lado repetido (espelho) | **só avisa** | a mesma lateral ou diagonal tirada duas vezes (compara com o par espelhado, usando o recorte do veículo quando há caixa) | depende do fundo e da iluminação dos dois lados |
 | Inclinação | reprova | celular torto ou apontado para o chão/céu | no iPhone exige tocar em "Ativar nível"; sem sensor, a camada fica sem opinião |
@@ -109,7 +117,9 @@ O modo `?dev=1` mostra as métricas medidas e os limites de cada foto e a caixa 
 - **Detector:** o primeiro carregamento baixa cerca de 18 MB.
 - **CSP:** a página não libera `unsafe-eval`. O TF.js tenta WebAssembly num `try` e segue sem ele (o navegador registra uma recusa `wasm-eval`, esperada).
 
-**Possibilidade futura (não implementada):** OCR local do odômetro e do chassi com Tesseract.js. Seria só como conferência, nunca como critério: é pesado (cerca de 10 MB) e lê mal odômetro digital.
+**Possibilidades futuras (não implementadas):**
+- OCR local do odômetro, do chassi e da placa com Tesseract.js, só como conferência (a placa lida na frente e na traseira resolveria "dois veículos da mesma cor"). É pesado (cerca de 10 MB) e lê mal odômetro digital.
+- Avarias: marcação manual (o associado toca no ponto da avaria na foto e tira um close) e, depois, um modelo de visão treinado para avarias (riscos, amassados, vidro trincado, farol quebrado), plugado em `analisarFoto(imagem, slot)`.
 
 **Fase 2 (não feita):**
 - cadastro do candidato e do veículo;

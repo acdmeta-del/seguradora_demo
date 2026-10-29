@@ -36,9 +36,12 @@ after(async () => {
   if (server) await new Promise((resolve) => server.close(resolve));
 });
 
+// Localização fictícia (Esplanada, Brasília): a página exige GPS para tirar foto
+const GEO = { latitude: -15.7939, longitude: -47.8828, accuracy: 12 };
+
 // Abre a página registrando TODOS os pedidos. Tráfego externo é bloqueado (só fontes do Google são esperadas).
 async function abrir(t, { dev = true, ajustes, initScript, rotas } = {}) {
-  const context = await browser.newContext({ permissions: ["camera"], acceptDownloads: true, viewport: { width: 390, height: 844 } });
+  const context = await browser.newContext({ permissions: ["camera", "geolocation"], geolocation: GEO, acceptDownloads: true, viewport: { width: 390, height: 844 } });
   t.after(() => context.close());
   const requests = [];
   context.on("request", (r) => requests.push(r));
@@ -101,7 +104,10 @@ const cena = (semente) => { const b = blocos(semente); return png(W, H, (x, y) =
 const lateral = (espelhada) => { const b = blocos(5); return png(W, H, (x, y) => 50 + 140 * ((espelhada ? W - x : x) / W) + (b(x, y) - 0.5) * 40); };
 const escuraTremida = png(W, H, (x, y) => 18 + 6 * Math.sin(x / 40) * Math.cos(y / 40));
 
-const enviar = (page, buffer) => page.setInputFiles("#v-arquivo", { name: "sintetica.png", mimeType: "image/png", buffer });
+async function enviar(page, buffer) {
+  await page.waitForFunction(() => !document.querySelector("#v-arquivo").disabled, null, { timeout: 15000 });
+  await page.setInputFiles("#v-arquivo", { name: "sintetica.png", mimeType: "image/png", buffer });
+}
 const SEM_DETECTOR = { limites: {}, camadas: { deteccao: false } };
 async function esperarResultado(page) {
   await page.waitForFunction(() => !document.querySelector("#v-resultado").hidden &&
@@ -324,7 +330,7 @@ test("câmera: botão de foto volta a funcionar depois de aceitar, e foto do sen
 
 test("tela da câmera: vídeo e disparador cabem na tela, em pé e deitado, sem rolar", async (t) => {
   for (const viewport of [{ width: 375, height: 667 }, { width: 390, height: 844 }, { width: 844, height: 390 }, { width: 667, height: 375 }]) {
-    const context = await browser.newContext({ permissions: ["camera"], viewport });
+    const context = await browser.newContext({ permissions: ["camera", "geolocation"], geolocation: GEO, viewport });
     t.after(() => context.close());
     await context.route("**/*", (route) => (new URL(route.request().url()).origin === origin ? route.continue() : route.abort()));
     await context.addInitScript((a) => localStorage.setItem("vistoria-ajustes", JSON.stringify(a)), SEM_DETECTOR);
@@ -372,4 +378,95 @@ test("silhueta gira com o celular deitado quando o vídeo chega em pé (iPhone c
   await page.waitForTimeout(400);
   const [guia, sil] = await Promise.all([page.locator("#v-guia").boundingBox(), page.locator("#v-silhueta").boundingBox()]);
   assert.ok(Math.abs(guia.width - sil.width) < 2 && Math.abs(guia.height - sil.height) < 2, JSON.stringify({ guia, sil }));
+});
+
+test("localização obrigatória: sem permissão, mensagem clara e nenhuma foto", async (t) => {
+  const initScript = () => {
+    const negar = (_ok, erro) => setTimeout(() => erro({ code: 1, message: "negado" }), 10);
+    navigator.geolocation.watchPosition = negar;
+    navigator.geolocation.getCurrentPosition = negar;
+  };
+  const { page } = await abrir(t, { ajustes: SEM_DETECTOR, initScript });
+  await page.click("#v-comecar");
+  await page.locator("#v-geo-erro").waitFor({ state: "visible" });
+  assert.match(await page.locator("#v-geo-erro").innerText(), /localização é obrigatória e foi negada/);
+  assert.match(await page.locator("#v-geo-status").innerText(), /Sem localização/);
+  await page.waitForFunction(() => document.querySelector("#v-video").videoWidth > 0, null, { timeout: 15000 });
+  assert.equal(await page.locator("#v-capturar").isDisabled(), true, "câmera aberta, mas sem GPS não tira foto");
+  assert.equal(await page.locator("#v-arquivo").isDisabled(), true);
+  assert.equal(await page.locator("#v-resultado").isHidden(), true);
+});
+
+test("carimbo: a foto guardada tem faixa com data e hora de Brasília e o logo; localização no relatório", async (t) => {
+  const { page } = await abrir(t, { ajustes: SEM_DETECTOR });
+  await page.click("#v-comecar");
+  await page.locator("#v-geo-status.v-chip--ok").waitFor();
+  assert.match(await page.locator("#v-geo-status").innerText(), /Localização ok \(±12 m\)/);
+  await enviar(page, cena(6));
+  await esperarResultado(page);
+  // 1280x720 + faixa de 58 px (4,5% do lado maior) embaixo, escura
+  const info = await page.locator("#v-previa-img").evaluate(async (img) => {
+    await img.decode();
+    const c = document.createElement("canvas"); c.width = img.naturalWidth; c.height = img.naturalHeight;
+    const g = c.getContext("2d"); g.drawImage(img, 0, 0);
+    const px = (x, y) => Array.from(g.getImageData(x, y, 1, 1).data.slice(0, 3));
+    return { w: img.naturalWidth, h: img.naturalHeight, fundoFaixa: px(4, img.naturalHeight - 4), meioFoto: px(640, 300) };
+  });
+  assert.deepEqual([info.w, info.h], [1280, 778]);
+  assert.ok(info.fundoFaixa.every((v) => v < 40), `faixa escura: ${info.fundoFaixa}`);
+  const metricas = await page.locator("#v-metricas").innerText();
+  assert.match(metricas, /\d{2}-\d{2}-\d{4} \d{2}:\d{2}:\d{2}\s+·\s+Horário de Brasília/);
+  assert.match(metricas, /-15\.7939, -47\.8828 \(±12 m/);
+  await page.click("#v-aceitar");
+  await page.locator("#v-captura").waitFor({ state: "visible" });
+  await page.click("#v-ver-revisao");
+  const [dj] = await Promise.all([page.waitForEvent("download"), page.click("#v-relatorio")]);
+  const rel = JSON.parse(await readFile(await dj.path(), "utf8"));
+  assert.equal(rel.tipoVeiculo, "carro");
+  assert.equal(rel.fotos[0].geo.lat, -15.7939);
+  assert.match(rel.fotos[0].carimbo, /Horário de Brasília/);
+  // O logo do carimbo é um arquivo do próprio site
+  assert.equal((await fetch(`${origin}/assets/carimbo-logo.svg`)).status, 200);
+});
+
+test("mesmo veículo: foto tirada longe das outras gera aviso", async (t) => {
+  const { page, context } = await abrir(t, { ajustes: SEM_DETECTOR });
+  await page.click("#v-comecar");
+  await enviar(page, cena(7));
+  await esperarResultado(page);
+  await page.click("#v-aceitar");
+  await page.locator("#v-captura").waitFor({ state: "visible" });
+  // ~1,1 km ao norte: outra localização para a 2ª foto
+  await context.setGeolocation({ latitude: -15.7839, longitude: -47.8828, accuracy: 12 });
+  await page.waitForFunction(() => /±12/.test(document.querySelector("#v-geo-status").textContent));
+  await page.waitForTimeout(300);
+  await enviar(page, cena(8));
+  const status = await esperarResultado(page);
+  assert.match(status, /Aprovada/, "distância só avisa");
+  assert.match(status, /tirada a uns 1\d{3} m das outras/);
+});
+
+test("tipos de veículo: moto e caminhão têm lista e silhueta próprias; trocar com fotos pede para apagar", async (t) => {
+  const { page } = await abrir(t, { ajustes: SEM_DETECTOR });
+  await page.check('input[name="tipo"][value="moto"]');
+  await page.click("#v-comecar");
+  await page.locator("#v-captura").waitFor({ state: "visible" });
+  assert.match(await page.locator("#v-progresso-texto").innerText(), /Foto 1 de 9/);
+  assert.match(await page.locator("#v-slot-instrucao").innerText(), /moto/);
+  assert.ok((await page.locator("#v-silhueta").innerHTML()).includes("ellipse"), "silhueta da moto");
+  await enviar(page, cena(9));
+  await esperarResultado(page);
+  if (await page.locator("#v-aceitar").isEnabled()) await page.click("#v-aceitar"); else await page.click("#v-forcar");
+  await page.locator("#v-captura").waitFor({ state: "visible" });
+  await page.click("#v-ver-revisao");
+  assert.match(await page.locator("#v-revisao-resumo").innerText(), /1 de 9/);
+  assert.match(await page.locator("#v-grade").innerText(), /Número do motor/);
+  // Trocar para caminhão: confirma (aceito no teste) e apaga as fotos da moto
+  await page.reload();
+  await page.check('input[name="tipo"][value="caminhao"]');
+  await page.waitForFunction(() => document.querySelector("#v-retomada").hidden);
+  await page.click("#v-comecar");
+  await page.locator("#v-captura").waitFor({ state: "visible" });
+  assert.match(await page.locator("#v-progresso-texto").innerText(), /Foto 1 de 12 · 0 pronta/);
+  assert.match(await page.locator("#v-slot-instrucao").innerText(), /cabine/);
 });

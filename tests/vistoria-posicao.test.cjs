@@ -6,7 +6,8 @@ global.window = {};
 require("../js/vistoria-config.js");
 const CFG = global.window.VISTORIA_CONFIG;
 const L = CFG.limites;
-const slot = (id) => CFG.slots.find((s) => s.id === id);
+const slot = (id) => Object.values(CFG.tipos).flatMap((t) => t.slots).find((s) => s.id === id);
+const CARRO = CFG.tipos.carro;
 const perto = (a, b, tol = 0.5) => assert.ok(Math.abs(a - b) <= tol, `${a} ≉ ${b}`);
 
 test("inclinação: em pé (retrato e paisagem) fica reto; torto e deitado são detectados", () => {
@@ -69,28 +70,52 @@ test("enquadramento: sem carro, pequeno, cortado e fora do centro têm motivos p
 
 test("ângulo: faixas do 1º teste real; bloqueia só com confiança alta", () => {
   const caixa = (prop, extra) => det(0.1, 0.2, 0.6, (0.6 * 640) / 360 / prop, extra); // caixa com a proporção pedida
+  const est = (d, s) => P.estimarAngulo(d, s, CARRO.faixasAngulo, CARRO);
   // Valores medidos no 1º teste: frente 1,31, traseira 1,37, diagonais 1,46–1,58, laterais 2,36–2,45
-  assert.equal(P.estimarAngulo(caixa(1.31), slot("frente")).grupo, "frente-traseira");
-  assert.equal(P.estimarAngulo(caixa(1.37), slot("traseira")).compativel, true);
-  for (const p of [1.46, 1.53, 1.58]) assert.equal(P.estimarAngulo(caixa(p), slot("diagonal-frontal-esquerda")).grupo, "diagonal", String(p));
-  for (const p of [2.36, 2.45]) assert.equal(P.estimarAngulo(caixa(p), slot("lateral-esquerda")).compativel, true, String(p));
+  assert.equal(est(caixa(1.31), slot("frente")).grupo, "frente-traseira");
+  assert.equal(est(caixa(1.37), slot("traseira")).compativel, true);
+  for (const p of [1.46, 1.53, 1.58]) assert.equal(est(caixa(p), slot("diagonal-frontal-esquerda")).grupo, "diagonal", String(p));
+  for (const p of [2.36, 2.45]) assert.equal(est(caixa(p), slot("lateral-esquerda")).compativel, true, String(p));
   // Frente bem estreita no passo da lateral: confiança alta, bloqueia
-  const frente = P.estimarAngulo(caixa(1.1), slot("lateral-esquerda"));
+  const frente = est(caixa(1.1), slot("lateral-esquerda"));
   assert.equal(frente.confianca, "alta");
   assert.equal(P.avaliarAngulo(frente, slot("lateral-esquerda")).erros[0].codigo, "angulo");
   // Lateral (2,4, média) no passo da diagonal: só aviso
-  const r = P.avaliarAngulo(P.estimarAngulo(caixa(2.4), slot("diagonal-frontal-esquerda")), slot("diagonal-frontal-esquerda"));
+  const r = P.avaliarAngulo(est(caixa(2.4), slot("diagonal-frontal-esquerda")), slot("diagonal-frontal-esquerda"));
   assert.deepEqual(r.erros, []);
   assert.equal(r.avisos[0].codigo, "angulo");
   // Lateral bem comprida (2,8) no passo da frente: alta, bloqueia
-  assert.equal(P.avaliarAngulo(P.estimarAngulo(caixa(2.8), slot("frente")), slot("frente")).erros.length, 1);
+  assert.equal(P.avaliarAngulo(est(caixa(2.8), slot("frente")), slot("frente")).erros.length, 1);
   // Zona indefinida (~1,95): sem opinião
-  const meio = P.estimarAngulo(caixa(1.95), slot("frente"));
+  const meio = est(caixa(1.95), slot("frente"));
   assert.equal(meio.grupo, "indefinido");
   assert.deepEqual(P.avaliarAngulo(meio, slot("frente")), { erros: [], avisos: [] });
-  // Moto: confiança sempre baixa; ângulo interno: sem estimativa
-  assert.equal(P.estimarAngulo(caixa(1.1, { classe: "motorcycle" }), slot("lateral-esquerda")).confianca, "baixa");
-  assert.equal(P.estimarAngulo(det(0.3, 0.3, 0.4, 0.4), slot("painel-odometro")), null);
+  // Moto detectada num carro: as faixas não valem, confiança baixa; ângulo interno: sem estimativa
+  assert.equal(est(caixa(1.1, { classe: "motorcycle" }), slot("lateral-esquerda")).confianca, "baixa");
+  // Tipos ainda sem calibrar (moto, caminhão): nunca bloqueiam
+  for (const t of ["moto", "caminhao"]) {
+    const s0 = CFG.tipos[t].slots.find((s) => s.anguloEsperado === "lateral");
+    const e = P.estimarAngulo(caixa(0.5, { classe: CFG.tipos[t].classes[0] }), s0, CFG.tipos[t].faixasAngulo, CFG.tipos[t]);
+    assert.equal(e.confianca, "baixa", t);
+    assert.deepEqual(P.avaliarAngulo(e, s0).erros, [], t);
+  }
+  assert.equal(est(det(0.3, 0.3, 0.4, 0.4), slot("painel-odometro")), null);
+});
+
+test("enquadramento por tipo: moto de frente usa o maior lado; outro tipo de veículo só avisa", () => {
+  const moto = CFG.tipos.moto, frenteMoto = moto.slots[0];
+  // Moto de frente: caixa estreita (25% da largura) mas alta (75%): enquadrada
+  const m = det(0.38, 0.12, 0.25, 0.75, { classe: "motorcycle" });
+  assert.deepEqual(P.avaliarEnquadramento(m, frenteMoto, L, moto), { erros: [], avisos: [] });
+  // Moto pequena: mensagem no feminino
+  assert.match(P.avaliarEnquadramento(det(0.45, 0.35, 0.1, 0.3, { classe: "motorcycle" }), frenteMoto, L, moto).erros[0].texto, /^A moto está pequena/);
+  // Carro numa vistoria de moto: aviso, não erro
+  const r = P.avaliarEnquadramento(det(0.15, 0.2, 0.7, 0.6), CFG.tipos.moto.slots[2], L, moto);
+  assert.equal(r.avisos[0].codigo, "outro_tipo");
+  assert.match(r.avisos[0].texto, /um carro, mas esta vistoria é de moto/);
+  // Caminhão: lateral aceita até 96% da largura
+  const cam = CFG.tipos.caminhao;
+  assert.deepEqual(P.avaliarEnquadramento(det(0.025, 0.2, 0.95, 0.5, { classe: "truck" }), cam.slots[2], L, cam).erros, []);
 });
 
 test("ponto de extensão analisarFoto existe e, por enquanto, não opina", async () => {
