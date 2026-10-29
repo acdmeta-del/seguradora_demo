@@ -163,7 +163,11 @@
     el.capturar.disabled = true;
   }
   async function abrirCamera() {
-    if (estado.stream) return true;
+    if (estado.stream) {
+      const t = estado.stream.getVideoTracks()[0];
+      if (t && t.readyState === "live") return true;
+      pararCamera(); // câmera encerrada (outro app, bloqueio de tela): abre de novo
+    }
     el.camErro.hidden = true;
     if (!window.isSecureContext) { erroCamera(MSG_CAMERA.inseguro); return false; }
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { erroCamera(MSG_CAMERA.semSuporte); return false; }
@@ -188,19 +192,44 @@
     el.video.srcObject = null;
   }
 
-  // Foto em resolução cheia (ImageCapture, Chrome Android) ou o quadro atual do vídeo
-  async function tirarFoto() {
+  // Gira a imagem em ±90° (devolve um canvas, que serve de fonte para as medições)
+  function girar(fonte, largura, altura, graus) {
+    const c = document.createElement("canvas");
+    c.width = altura;
+    c.height = largura;
+    const ctx = c.getContext("2d");
+    ctx.translate(c.width / 2, c.height / 2);
+    ctx.rotate((graus * Math.PI) / 180);
+    ctx.drawImage(fonte, -largura / 2, -altura / 2, largura, altura);
+    return c;
+  }
+  // Põe a foto na posição em que o celular estava (ver P.rotacaoNecessaria)
+  function corrigirPosicao(foto, inclinacao) {
+    const graus = P.rotacaoNecessaria(foto.largura, foto.altura, inclinacao);
+    if (!graus) return foto;
+    const c = girar(foto.fonte, foto.largura, foto.altura, graus);
+    if (foto.fonte.close) foto.fonte.close();
+    return { ...foto, fonte: c, largura: c.width, altura: c.height, rotacao: graus };
+  }
+
+  // Foto em resolução cheia (ImageCapture) ou o quadro atual do vídeo
+  async function tirarFoto(inclinacao) {
+    const v = el.video;
     const track = estado.stream && estado.stream.getVideoTracks()[0];
     if (CFG.camera.usarTakePhoto && track && "ImageCapture" in window) {
       try {
         const blob = await new window.ImageCapture(track).takePhoto();
         const bmp = await createImageBitmap(blob);
-        return { fonte: bmp, largura: bmp.width, altura: bmp.height, origem: "takePhoto" };
+        const foto = corrigirPosicao({ fonte: bmp, largura: bmp.width, altura: bmp.height, origem: "takePhoto" }, inclinacao);
+        // Sem sensor para saber o lado: se a foto não bate com o vídeo (retrato x paisagem), usa o vídeo
+        const semSensor = !inclinacao || inclinacao.deitado;
+        const discorda = semSensor && v.videoWidth && (v.videoWidth > v.videoHeight) !== (foto.largura > foto.altura);
+        if (!discorda) return foto;
+        if (foto.fonte.close) foto.fonte.close();
       } catch { /* cai no quadro do vídeo */ }
     }
-    const v = el.video;
     if (!v.videoWidth) throw new Error("A câmera ainda não está pronta. Espere a imagem aparecer.");
-    return { fonte: v, largura: v.videoWidth, altura: v.videoHeight, origem: "video" };
+    return corrigirPosicao({ fonte: v, largura: v.videoWidth, altura: v.videoHeight, origem: "video" }, inclinacao);
   }
 
   /* ---------- Silhuetas (SVG simples sobre a câmera) ---------- */
@@ -263,7 +292,8 @@
     el.orientacao.hidden = !(camadas.inclinacao && slot.externo && incl.precisaPermissao() && !incl.ativo);
     if (incl.ultimo) atualizarNivel(incl.ultimo); else el.nivel.hidden = true;
     if (slot.externo && camadas.deteccao) prepararDetector();
-    await abrirCamera();
+    // O botão fica desativado durante a análise da foto anterior: libera de novo aqui
+    el.capturar.disabled = !(await abrirCamera());
   }
 
   function prepararDetector() {
@@ -285,7 +315,7 @@
     el.status.textContent = "";
     try {
       const inclinacao = incl.ultimo ? { ...incl.ultimo } : null; // no momento do clique
-      const foto = origemArquivo ? await deArquivo(origemArquivo) : await tirarFoto();
+      const foto = origemArquivo ? await deArquivo(origemArquivo) : await tirarFoto(inclinacao);
       estado.tentativas[slot.id] = (estado.tentativas[slot.id] || 0) + 1;
       mostrarResultadoCarregando(slot);
       estado.pendente = await analisar(foto, slot, inclinacao);
@@ -315,14 +345,14 @@
   }
   const paraBlob = (canvas, qualidade) => new Promise((ok) => canvas.toBlob(ok, "image/jpeg", qualidade));
 
-  async function analisar({ fonte, largura, altura, origem }, slot, inclinacao) {
+  async function analisar({ fonte, largura, altura, origem, rotacao = 0 }, slot, inclinacao) {
     const t0 = performance.now();
     const blob = await paraBlob(canvasDe(fonte, largura, altura), CFG.camera.qualidadeJpeg);
     const ca = canvasDe(fonte, largura, altura, CFG.analise.ladoMaior);
     const img = ca.getContext("2d", { willReadFrequently: true }).getImageData(0, 0, ca.width, ca.height);
     const medidas = Q.medir(img, { largura, altura });
     const foto = {
-      slotId: slot.id, blob, url: URL.createObjectURL(blob), largura, altura, origem,
+      slotId: slot.id, blob, url: URL.createObjectURL(blob), largura, altura, origem, rotacao,
       capturadaEm: new Date().toISOString(), tentativa: estado.tentativas[slot.id],
       medidas, inclinacao, deteccao: null, angulo: null, extensao: null, geo: null
     };
@@ -438,7 +468,7 @@
     const m = foto.medidas, d = foto.deteccao, a = foto.angulo, i = foto.inclinacao;
     const linhas = [
       ["Resolução", `${m.largura}×${m.altura}`, `≥ ${L.resolucaoMaior}×${L.resolucaoMenor}`],
-      ["Origem", foto.origem, ""],
+      ["Origem", `${foto.origem}${foto.rotacao ? ` (girada ${foto.rotacao}°)` : ""}`, ""],
       ["Nitidez", arred(m.nitidez, 1), `≥ ${L.nitidez}`],
       ["Nitidez do centro", arred(m.nitidezCentro, 1), `≥ ${L.nitidezCentro}`],
       ["Luminância média", arred(m.media, 1), `${L.lumMin} a ${L.lumMax}`],
@@ -554,8 +584,9 @@
           tempoCapturaMs: f.duracaoMs ?? null,
           tempoAnaliseMs: f.tempoAnaliseMs ?? null,
           origem: f.origem || null,
+          rotacaoCorrigida: f.rotacao || 0,
           metricas: f.medidas ? Object.fromEntries(Object.entries(f.medidas).map(([k, v]) => [k, arred(v, 3)])) : null,
-          inclinacao: f.inclinacao ? { pitch: arred(f.inclinacao.pitch, 1), roll: arred(f.inclinacao.roll, 1) } : null,
+          inclinacao: f.inclinacao ? { pitch: arred(f.inclinacao.pitch, 1), roll: arred(f.inclinacao.roll, 1), paisagem: f.inclinacao.paisagem, quarto: f.inclinacao.quarto } : null,
           deteccao: f.deteccao || null,
           angulo: f.angulo || null,
           comparacoes: f.resultado ? f.resultado.extras : null,

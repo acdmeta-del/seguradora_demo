@@ -31,7 +31,23 @@
     const quarto = Math.round(angulo / 90);
     let roll = angulo - quarto * 90;
     if (roll > 45) roll -= 90;
-    return { pitch, roll, paisagem: Math.abs(quarto) % 2 === 1, deitado: Math.abs(pitch) > 60 };
+    // quarto: 0 = em pé; +1 = topo do celular virado para a esquerda; -1 = para a direita; ±2 = de cabeça para baixo
+    return { pitch, roll, quarto, paisagem: Math.abs(quarto) % 2 === 1, deitado: Math.abs(pitch) > 60 };
+  }
+
+  /*
+   * Quantos graus girar a foto para ela ficar na posição em que o celular estava.
+   * Alguns navegadores (ex.: Safari no iPhone com ImageCapture.takePhoto) entregam a imagem
+   * na posição do sensor (sempre em pé), mesmo com o celular deitado: o carro sai de lado.
+   * Só corrige quando a foto e o celular discordam (paisagem x retrato) e o sensor diz o lado.
+   *   -90 = girar no sentido anti-horário (topo do celular estava à esquerda)
+   *   +90 = girar no sentido horário (topo do celular estava à direita)
+   */
+  function rotacaoNecessaria(largura, altura, incl) {
+    if (!incl || incl.deitado || incl.paisagem === largura > altura) return 0;
+    if (incl.quarto === 1) return -90;
+    if (incl.quarto === -1) return 90;
+    return 0;
   }
 
   function avaliarInclinacao(incl, slot, L) {
@@ -211,5 +227,5 @@
     return null;
   }
 
-  return { inclinacaoDe, avaliarInclinacao, criarInclinacao, principalVeiculo, avaliarEnquadramento, criarDetector, estimarAngulo, avaliarAngulo, analisarFoto };
+  return { inclinacaoDe, rotacaoNecessaria, avaliarInclinacao, criarInclinacao, principalVeiculo, avaliarEnquadramento, criarDetector, estimarAngulo, avaliarAngulo, analisarFoto };
 });

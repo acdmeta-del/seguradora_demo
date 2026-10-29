@@ -27,6 +27,21 @@ test("inclinação: em pé (retrato e paisagem) fica reto; torto e deitado são 
   assert.equal(P.inclinacaoDe(null, 0), null);
 });
 
+test("posição da foto: celular deitado com foto em pé (iPhone + takePhoto) é girada para o lado certo", () => {
+  // Topo do celular para a esquerda: céu à direita da imagem do sensor → girar anti-horário
+  const esquerda = P.inclinacaoDe(0, -90);
+  assert.equal(esquerda.quarto, 1);
+  assert.equal(P.rotacaoNecessaria(1080, 1920, esquerda), -90);
+  const direita = P.inclinacaoDe(0, 90);
+  assert.equal(direita.quarto, -1);
+  assert.equal(P.rotacaoNecessaria(1080, 1920, direita), 90);
+  // Foto já de lado, celular em pé, sem sensor ou celular deitado na mesa: não mexe
+  assert.equal(P.rotacaoNecessaria(1920, 1080, esquerda), 0);
+  assert.equal(P.rotacaoNecessaria(1080, 1920, P.inclinacaoDe(90, 0)), 0);
+  assert.equal(P.rotacaoNecessaria(1080, 1920, null), 0);
+  assert.equal(P.rotacaoNecessaria(1080, 1920, P.inclinacaoDe(0, 0)), 0);
+});
+
 const det = (x, y, w, h, extra = {}) => ({ encontrado: true, classe: "car", score: 0.9, caixa: { x, y, w, h }, quadro: { largura: 640, altura: 360 }, ...extra });
 const codigos = (r) => r.erros.map((e) => e.codigo);
 

@@ -277,3 +277,47 @@ test("nível do celular: torto reprova com motivo; reto aprova", async (t) => {
   assert.match(status, /Aprovada/);
   assert.doesNotMatch(status, /torto/);
 });
+
+test("câmera: botão de foto volta a funcionar depois de aceitar, e foto do sensor em pé é girada", async (t) => {
+  // Simula o Safari do iPhone: takePhoto devolve a imagem do sensor EM PÉ (1080x1920),
+  // com o "céu" (claro) à direita, mesmo com o celular deitado
+  const initScript = () => {
+    window.ImageCapture = class {
+      async takePhoto() {
+        const c = new OffscreenCanvas(1080, 1920), g = c.getContext("2d");
+        g.fillStyle = "#333"; g.fillRect(0, 0, 1080, 1920);
+        g.fillStyle = "#eee"; g.fillRect(760, 0, 320, 1920);
+        for (let i = 0; i < 4000; i++) { g.fillStyle = i % 2 ? "#777" : "#aaa"; g.fillRect((i * 37) % 700, (i * 53) % 1920, 6, 6); }
+        return c.convertToBlob({ type: "image/jpeg", quality: 0.9 });
+      }
+    };
+  };
+  const { page, requests } = await abrir(t, { ajustes: SEM_DETECTOR, initScript });
+  await page.click("#v-comecar");
+  await page.waitForFunction(() => document.querySelector("#v-video").videoWidth > 0, null, { timeout: 15000 });
+  await page.evaluate(() => window.dispatchEvent(new DeviceOrientationEvent("deviceorientation", { beta: 0, gamma: -90 }))); // deitado, topo à esquerda
+  await page.click("#v-capturar");
+  await esperarResultado(page);
+  const metricas = await page.locator("#v-metricas").innerText();
+  assert.match(metricas, /1920×1080/, "a foto ficou deitada (paisagem)");
+  assert.match(metricas, /girada -90°/);
+  assert.doesNotMatch(await page.locator("#v-status").innerText(), /Gire o celular/);
+  // O lado claro (céu) foi para o alto da foto
+  const topoClaro = await page.locator("#v-previa-img").evaluate(async (img) => {
+    await img.decode();
+    const c = document.createElement("canvas"); c.width = 40; c.height = 40;
+    const g = c.getContext("2d"); g.drawImage(img, 0, 0, 40, 40);
+    const px = (x, y) => g.getImageData(x, y, 1, 1).data[0];
+    return px(20, 2) > 200 && px(20, 38) < 200;
+  });
+  assert.equal(topoClaro, true);
+  // Aceita (forçado, se preciso) e o botão de foto precisa estar ativo no passo seguinte
+  if (await page.locator("#v-aceitar").isEnabled()) await page.click("#v-aceitar"); else await page.click("#v-forcar");
+  await page.locator("#v-captura").waitFor({ state: "visible" });
+  assert.equal(await page.locator("#v-slot-nome").innerText(), "Traseira");
+  await page.waitForFunction(() => !document.querySelector("#v-capturar").disabled, null, { timeout: 5000 });
+  await page.click("#v-capturar");
+  await esperarResultado(page);
+  assert.match(await page.locator("#v-resultado-titulo").innerText(), /Traseira/);
+  semEnvio(requests);
+});
