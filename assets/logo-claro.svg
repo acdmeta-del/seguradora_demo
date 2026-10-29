@@ -1,0 +1,12 @@
+<!-- LOGO PROVISÓRIO (versão clara do assets/logo.svg, para fundo escuro): substituir pelo SVG oficial
+     da Integra mantendo o nome do arquivo. Usado no carimbo do rodapé das fotos da vistoria. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 236 64" width="236" height="64" role="img" aria-label="Integra Proteção Veicular">
+  <g fill="none" stroke-linecap="round" stroke-width="5">
+    <path d="M8 50 Q 14 16 46 8" stroke="#FFFFFF"/>
+    <path d="M16 54 Q 22 26 50 19" stroke="#98C61D"/>
+    <path d="M25 57 Q 31 37 54 31" stroke="#98C61D"/>
+    <path d="M35 58 Q 40 47 56 43" stroke="#FFFFFF"/>
+  </g>
+  <text x="66" y="38" font-family="Nunito, 'Varela Round', 'Arial Rounded MT Bold', Arial, sans-serif" font-size="34" font-weight="800" letter-spacing="-0.5"><tspan fill="#FFFFFF">Inte</tspan><tspan fill="#98C61D">gra</tspan></text>
+  <text x="68" y="56" font-family="Nunito, 'Varela Round', Arial, sans-serif" font-size="12.5" font-weight="600" fill="#FFFFFF" letter-spacing="0.4">Proteção veicular</text>
+</svg>

@@ -86,9 +86,9 @@ window.VISTORIA_CONFIG = {
     ["intervaloMaxMin", "Mesmo veículo: intervalo máximo (min)", 5, 240, 5]
   ],
 
-  // Carimbo no rodapé de cada foto. PERSONALIZAR: logo (versão clara, fundo transparente)
+  // Carimbo no rodapé de cada foto. PERSONALIZAR: logo da Integra em versão clara (fundo transparente)
   carimbo: {
-    logo: "assets/carimbo-logo.svg",
+    logo: "assets/logo-claro.svg",
     fuso: "America/Sao_Paulo",       // horário de Brasília
     rotuloFuso: "Horário de Brasília",
     alturaRelativa: 0.045            // altura da faixa / lado maior da foto
@@ -123,6 +123,7 @@ window.VISTORIA_CONFIG = {
     carro: {
       nome: "Carro", artigo: "o carro",
       classes: ["car", "truck"], // picape e SUV às vezes saem como "truck"
+      compararCor: true,         // cor da lataria entre as fotos (calibrado no 1º teste)
       faixasAngulo: [
         { ate: 1.42, grupo: "frente-traseira", alta: [0, 1.3], media: [1.3, 1.39] },
         { ate: 1.85, grupo: "diagonal", media: [1.45, 1.75] },
@@ -163,6 +164,9 @@ window.VISTORIA_CONFIG = {
     moto: {
       nome: "Moto", artigo: "a moto",
       classes: ["motorcycle"],
+      // Cor NÃO serve para moto: a caixa é quase toda fundo, pneus e peças pretas
+      // (2º teste: duas motos diferentes ficaram 0,73–0,82 parecidas)
+      compararCor: false,
       faixasAngulo: [ // estimativa inicial, sem calibrar
         { ate: 0.8, grupo: "frente-traseira" },
         { ate: 1.35, grupo: "diagonal" },
@@ -195,6 +199,7 @@ window.VISTORIA_CONFIG = {
     caminhao: {
       nome: "Caminhão", artigo: "o caminhão",
       classes: ["truck", "bus"],
+      compararCor: false, // cabine e baú costumam ter cores diferentes: daria alarme falso
       faixasAngulo: [ // estimativa inicial, sem calibrar (muda muito com cavalo, baú e carreta)
         { ate: 1.25, grupo: "frente-traseira" },
         { ate: 2.0, grupo: "diagonal" },

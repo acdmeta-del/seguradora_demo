@@ -78,7 +78,7 @@ compatibilidade da CSP com o diálogo e com `fetch`.
 
 **Localização e horário obrigatórios:** sem uma posição do GPS com até 2 minutos (`geoIdadeMaxS`), o botão de foto fica desativado; com a permissão negada, a página explica como liberar no iPhone e no Android. Cada foto guarda latitude, longitude, precisão e a diferença entre o relógio do aparelho e a hora do GPS (relógio alterado aparece no relatório).
 
-**Carimbo:** a foto guardada ganha uma faixa embaixo com data e hora de Brasília (`DD-MM-AAAA HH:MM:SS`) e o logo (`assets/carimbo-logo.svg`, **provisório**: trocar pelo oficial). A faixa fica abaixo da imagem, sem cobrir o veículo, e as medições usam a foto sem carimbo. A hora vem do relógio do aparelho: na Fase 2, conferir com a hora do servidor.
+**Carimbo:** a foto guardada ganha uma faixa embaixo com data e hora de Brasília (`DD-MM-AAAA HH:MM:SS`) e o logo da Integra em versão clara (`assets/logo-claro.svg`, **provisório** como o `assets/logo.svg`: trocar pelo oficial). A faixa fica abaixo da imagem, sem cobrir o veículo, e as medições usam a foto sem carimbo. A hora vem do relógio do aparelho: na Fase 2, conferir com a hora do servidor.
 
 | Arquivo | Papel |
 |---|---|
@@ -98,7 +98,7 @@ compatibilidade da CSP com o diálogo e com `fetch`.
 | Qualidade | reprova | foto tremida ou fora de foco, muito escura ou clara, reflexo forte, resolução baixa, celular em pé nos ângulos externos | a nitidez muda com o aparelho e a textura do carro (carro liso e limpo mede menos): calibre com os sliders |
 | Contraluz | reprova | sol atrás do carro (centro bem mais escuro que as bordas) | carro escuro em fundo claro também cai aqui |
 | Legibilidade (odômetro, chassi) | reprova | centro desfocado | não lê os números (o OCR fica para depois, ver abaixo) |
-| Mesmo veículo | **só avisa** | cor da carroceria diferente das outras fotos (mesmo carro 0,71–0,99; cor diferente ≤ 0,6), moto x carro/caminhão, foto a mais de 150 m das outras, mais de 45 min depois da primeira | não separa dois veículos da mesma cor no mesmo lugar (nem branco x prata): só lendo a placa |
+| Mesmo veículo | **só avisa** | carro de cor diferente (mesmo carro 0,71–0,99; cor diferente ≤ 0,6), moto x carro/caminhão, foto a mais de 150 m das outras, mais de 45 min depois da primeira | **não pega dois veículos parecidos no mesmo lugar** (2º teste: duas motos diferentes passaram). A cor não serve para moto nem caminhão (desligada); a aparência muda mais com o ângulo do que com o modelo. Identidade de verdade só conferindo placa/chassi/motor com o cadastro (Fase 2) |
 | Duplicada (dHash) | **só avisa** | a mesma foto repetida | fundo igual com pouca diferença pode avisar à toa |
 | Lado repetido (espelho) | **só avisa** | a mesma lateral ou diagonal tirada duas vezes (compara com o par espelhado, usando o recorte do veículo quando há caixa) | depende do fundo e da iluminação dos dois lados |
 | Inclinação | reprova | celular torto ou apontado para o chão/céu | no iPhone exige tocar em "Ativar nível"; sem sensor, a camada fica sem opinião |

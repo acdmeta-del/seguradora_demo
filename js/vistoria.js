@@ -477,7 +477,8 @@
       juntar(r);
     }
     if (camadas.mesmoVeiculo) {
-      const resumo = (f) => ({ cor: f.medidas && f.medidas.cor, classe: f.deteccao && f.deteccao.encontrado ? f.deteccao.classe : null, geo: f.geo, em: Date.parse(f.capturadaEm) });
+      // Cor só onde funciona (tipo.compararCor): carro sim; moto e caminhão não
+      const resumo = (f) => ({ cor: tipo.compararCor && f.medidas ? f.medidas.cor : null, classe: f.deteccao && f.deteccao.encontrado ? f.deteccao.classe : null, geo: f.geo, em: Date.parse(f.capturadaEm) });
       const outras = [...estado.fotos.values()].filter((f) => f.slotId !== foto.slotId && ACEITAS.has(f.status)).map(resumo);
       const r = Q.avaliarMesmoVeiculo(resumo(foto), outras, L);
       extras.mesmoVeiculo = r.comparacao;

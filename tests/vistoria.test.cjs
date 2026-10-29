@@ -426,7 +426,7 @@ test("carimbo: a foto guardada tem faixa com data e hora de Brasília e o logo; 
   assert.equal(rel.fotos[0].geo.lat, -15.7939);
   assert.match(rel.fotos[0].carimbo, /Horário de Brasília/);
   // O logo do carimbo é um arquivo do próprio site
-  assert.equal((await fetch(`${origin}/assets/carimbo-logo.svg`)).status, 200);
+  assert.equal((await fetch(`${origin}/assets/logo-claro.svg`)).status, 200);
 });
 
 test("mesmo veículo: foto tirada longe das outras gera aviso", async (t) => {
