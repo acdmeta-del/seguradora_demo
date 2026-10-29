@@ -321,3 +321,55 @@ test("câmera: botão de foto volta a funcionar depois de aceitar, e foto do sen
   assert.match(await page.locator("#v-resultado-titulo").innerText(), /Traseira/);
   semEnvio(requests);
 });
+
+test("tela da câmera: vídeo e disparador cabem na tela, em pé e deitado, sem rolar", async (t) => {
+  for (const viewport of [{ width: 375, height: 667 }, { width: 390, height: 844 }, { width: 844, height: 390 }, { width: 667, height: 375 }]) {
+    const context = await browser.newContext({ permissions: ["camera"], viewport });
+    t.after(() => context.close());
+    await context.route("**/*", (route) => (new URL(route.request().url()).origin === origin ? route.continue() : route.abort()));
+    await context.addInitScript((a) => localStorage.setItem("vistoria-ajustes", JSON.stringify(a)), SEM_DETECTOR);
+    const page = await context.newPage();
+    await page.goto(`${origin}/vistoria-teste.html?dev=1`);
+    await page.click("#v-comecar");
+    await page.waitForFunction(() => document.querySelector("#v-video").videoWidth > 0, null, { timeout: 15000 });
+    const dentro = async (sel) => {
+      const b = await page.locator(sel).boundingBox();
+      return b && b.x >= 0 && b.y >= 0 && b.x + b.width <= viewport.width + 0.5 && b.y + b.height <= viewport.height + 0.5;
+    };
+    for (const sel of ["#v-video", "#v-capturar", "#v-ver-revisao", "#v-slot-nome"]) assert.ok(await dentro(sel), `${sel} fora da tela em ${viewport.width}x${viewport.height}`);
+    // O disparador fica dentro da área da câmera e a página não rola
+    const cam = await page.locator("#v-camera").boundingBox(), bt = await page.locator("#v-capturar").boundingBox();
+    assert.ok(bt.y >= cam.y && bt.y + bt.height <= cam.y + cam.height);
+    assert.equal(await page.evaluate(() => document.documentElement.scrollHeight <= innerHeight + 1), true);
+    // A guia cobre exatamente a área visível do vídeo
+    const guia = await page.locator("#v-guia").boundingBox();
+    const area = await page.evaluate(() => { const v = document.querySelector("#v-video"); const k = Math.min(v.clientWidth / v.videoWidth, v.clientHeight / v.videoHeight); return { w: v.videoWidth * k, h: v.videoHeight * k }; });
+    assert.ok(Math.abs(guia.width - area.w) < 2 && Math.abs(guia.height - area.h) < 2, JSON.stringify({ guia, area }));
+  }
+});
+
+test("silhueta gira com o celular deitado quando o vídeo chega em pé (iPhone com tela travada)", async (t) => {
+  const initScript = () => {
+    navigator.mediaDevices.getUserMedia = async () => {
+      const cv = document.createElement("canvas"); cv.width = 1080; cv.height = 1920;
+      const g = cv.getContext("2d");
+      setInterval(() => { g.fillStyle = "#556"; g.fillRect(0, 0, 1080, 1920); }, 100);
+      return cv.captureStream(10);
+    };
+  };
+  const { page } = await abrir(t, { ajustes: SEM_DETECTOR, initScript });
+  await page.click("#v-comecar");
+  await page.waitForFunction(() => document.querySelector("#v-video").videoHeight > 0, null, { timeout: 15000 });
+  const giro = () => page.locator("#v-silhueta").evaluate((n) => n.style.transform);
+  const girar = (beta, gamma) => page.evaluate(([b, g]) => window.dispatchEvent(new DeviceOrientationEvent("deviceorientation", { beta: b, gamma: g })), [beta, gamma]);
+  await girar(90, 0);              // em pé: sem giro
+  assert.equal(await giro(), "");
+  await girar(0, -90);             // deitado, topo à esquerda: gira 90° (horário)
+  assert.equal(await giro(), "rotate(90deg)");
+  await girar(0, 90);              // deitado para o outro lado
+  assert.equal(await giro(), "rotate(-90deg)");
+  // A silhueta girada continua do tamanho da área do vídeo (medidas trocadas), depois da animação
+  await page.waitForTimeout(400);
+  const [guia, sil] = await Promise.all([page.locator("#v-guia").boundingBox(), page.locator("#v-silhueta").boundingBox()]);
+  assert.ok(Math.abs(guia.width - sil.width) < 2 && Math.abs(guia.height - sil.height) < 2, JSON.stringify({ guia, sil }));
+});

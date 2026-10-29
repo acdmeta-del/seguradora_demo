@@ -30,28 +30,72 @@ body.vistoria { padding-top: 0; background: var(--color-soft); color: var(--colo
 .v-link { justify-self: center; padding: var(--space-2); border: 0; background: none; color: var(--color-brand-text); font: inherit; font-weight: 800; text-decoration: underline; cursor: pointer; }
 label.btn { display: flex; align-items: center; justify-content: center; cursor: pointer; }
 
-/* Progresso */
-.v-progresso { margin-bottom: var(--space-3); }
-.v-progresso__barra { height: 10px; border-radius: var(--radius-pill); background: var(--color-line); overflow: hidden; }
-.v-progresso__barra span { display: block; height: 100%; width: 0; background: var(--color-brand); transition: width .3s; }
-.v-progresso p { margin: var(--space-1) 0 0; font-size: var(--fs-sm); font-weight: 700; }
-.v-instrucao { font-weight: 700; }
+/* Captura: câmera em TELA CHEIA. Vídeo inteiro visível (o que se vê é o que a foto pega),
+   textos por cima no alto e o disparador dentro da área da câmera, como no app de câmera. */
+body.v-modo-camera { overflow: hidden; }
+.v-tela--camera { position: fixed; inset: 0; z-index: 50; background: #000; color: #fff; }
+.v-camera { position: absolute; inset: 0; overflow: hidden; background: #000; }
+.v-camera video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; display: block; }
 
-/* Câmera: mostra o quadro inteiro (o que você vê é o que a foto pega) */
-.v-camera { position: relative; aspect-ratio: 4 / 3; border-radius: var(--radius-lg); background: #111; overflow: hidden; }
-.v-camera video { width: 100%; height: 100%; object-fit: contain; display: block; }
-.v-camera__erro { position: absolute; inset: auto var(--space-3) var(--space-3); margin: 0; padding: var(--space-3); border-radius: var(--radius-md); background: var(--color-error); color: #fff; font-weight: 800; }
-.v-silhueta { position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none; }
-.v-silhueta svg { width: 100%; height: 100%; }
-.v-silhueta__forma { fill: none; stroke: #fff; stroke-width: 3; stroke-linejoin: round; stroke-linecap: round; opacity: .85; filter: drop-shadow(0 0 2px rgba(0, 0, 0, .9)); }
-.v-silhueta__faixa { fill: none; stroke: var(--color-brand); stroke-width: 1.5; stroke-dasharray: 6 6; opacity: .8; }
-.v-nivel { position: absolute; left: 50%; top: var(--space-3); transform: translateX(-50%); display: grid; justify-items: center; gap: 4px; padding: 6px var(--space-3); border-radius: var(--radius-pill); background: rgba(0, 0, 0, .7); color: #FFD54F; font-weight: 900; font-size: var(--fs-sm); }
-.v-nivel__linha { display: block; width: 90px; height: 4px; border-radius: 2px; background: currentColor; transition: transform .1s linear; }
+.v-cam-topo {
+  position: absolute; inset: 0 0 auto; z-index: 2;
+  padding: calc(env(safe-area-inset-top) + var(--space-3)) var(--gutter) var(--space-6);
+  background: linear-gradient(rgba(0, 0, 0, .78), rgba(0, 0, 0, .45) 70%, transparent);
+}
+.v-cam-topo h2 { margin: var(--space-1) 0 2px; color: #fff; font-size: 1.25rem; line-height: 1.2; }
+.v-instrucao { margin: 0; font-size: .9375rem; font-weight: 700; line-height: 1.35; text-shadow: 0 1px 2px #000; }
+.v-progresso__barra { height: 6px; border-radius: var(--radius-pill); background: rgba(255, 255, 255, .25); overflow: hidden; }
+.v-progresso__barra span { display: block; height: 100%; width: 0; background: var(--color-brand); transition: width .3s; }
+.v-progresso p { margin: var(--space-1) 0 0; font-size: var(--fs-sm); font-weight: 800; color: rgba(255, 255, 255, .85); }
+
+/* Guia: mesma área do vídeo visível; a silhueta gira quando o celular está deitado e a tela não */
+.v-guia { position: absolute; z-index: 1; pointer-events: none; }
+.v-silhueta { position: absolute; transition: transform .25s; }
+.v-silhueta svg { width: 100%; height: 100%; display: block; }
+.v-silhueta__forma { fill: none; stroke: #fff; stroke-width: 2.2; stroke-linejoin: round; stroke-linecap: round; opacity: .9; filter: drop-shadow(0 0 1.5px rgba(0, 0, 0, .95)) drop-shadow(0 0 4px rgba(255, 255, 255, .35)); }
+.v-silhueta__faixa { fill: none; stroke: var(--color-brand); stroke-width: 1.2; stroke-dasharray: 5 6; opacity: .7; }
+
+.v-nivel { position: absolute; z-index: 3; left: 50%; bottom: calc(env(safe-area-inset-bottom) + 132px); transform: translateX(-50%); display: grid; justify-items: center; gap: 6px; padding: 6px var(--space-3); border-radius: var(--radius-pill); background: rgba(0, 0, 0, .55); color: #FFD54F; font-weight: 900; font-size: var(--fs-sm); pointer-events: none; }
+.v-nivel__linha { display: block; width: 110px; height: 3px; border-radius: 2px; background: currentColor; transition: transform .1s linear; }
 .v-nivel--ok { color: var(--color-brand); }
+.v-camera__erro { position: absolute; z-index: 4; left: var(--gutter); right: var(--gutter); top: 40%; margin: 0; padding: var(--space-3); border-radius: var(--radius-md); background: var(--color-error); color: #fff; font-weight: 800; }
+
+.v-cam-base {
+  position: absolute; inset: auto 0 0; z-index: 2;
+  display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: var(--space-3);
+  padding: var(--space-6) var(--gutter) calc(env(safe-area-inset-bottom) + var(--space-5));
+  background: linear-gradient(transparent, rgba(0, 0, 0, .55) 35%, rgba(0, 0, 0, .8));
+}
+.v-cam-lado { display: flex; flex-wrap: wrap; gap: var(--space-2); justify-content: flex-start; }
+.v-cam-lado:last-child { justify-content: flex-end; }
+.v-disparador { width: 78px; height: 78px; padding: 0; border: 4px solid #fff; border-radius: 50%; background: transparent; cursor: pointer; display: grid; place-items: center; }
+.v-disparador span { width: 62px; height: 62px; border-radius: 50%; background: #fff; transition: transform .1s; }
+.v-disparador:active span { transform: scale(.9); }
+.v-disparador:disabled { opacity: .4; cursor: not-allowed; }
+.v-disparador:focus-visible { outline: 3px solid var(--color-brand); outline-offset: 3px; }
+.v-chip { min-height: 44px; padding: var(--space-2) var(--space-3); border: 1.5px solid rgba(255, 255, 255, .7); border-radius: var(--radius-pill); background: rgba(0, 0, 0, .45); color: #fff; font: inherit; font-size: var(--fs-sm); font-weight: 800; cursor: pointer; display: inline-flex; align-items: center; }
+.v-cam-topo .v-chip { margin-top: var(--space-2); border-color: var(--color-brand); }
+
+/* Tela deitada (sem trava de rotação): controles numa coluna à direita, como no app de câmera */
+@media (orientation: landscape) and (max-height: 560px) {
+  .v-cam-topo { right: 128px; padding: calc(env(safe-area-inset-top) + var(--space-2)) var(--space-4) var(--space-4) calc(env(safe-area-inset-left) + var(--space-4)); }
+  .v-cam-topo h2 { font-size: 1.0625rem; }
+  .v-instrucao { font-size: var(--fs-sm); }
+  .v-cam-base {
+    inset: 0 0 0 auto; width: 128px;
+    grid-template-columns: 1fr; grid-template-rows: 1fr auto 1fr; justify-items: center;
+    padding: var(--space-3) calc(env(safe-area-inset-right) + var(--space-3)) var(--space-3) var(--space-3);
+    background: linear-gradient(90deg, transparent, rgba(0, 0, 0, .7) 30%);
+  }
+  .v-cam-lado, .v-cam-lado:last-child { flex-direction: column; justify-content: center; align-items: center; }
+  .v-camera video { width: calc(100% - 128px); }
+  .v-nivel { left: calc(50% - 64px); bottom: var(--space-3); }
+  .v-chip { white-space: nowrap; padding: var(--space-2); }
+}
 
 /* Resultado */
 .v-previa { position: relative; margin: 0 0 var(--space-3); border-radius: var(--radius-lg); background: #111; overflow: hidden; }
-.v-previa img { display: block; width: 100%; height: auto; min-height: 120px; object-fit: contain; }
+.v-previa img { display: block; width: 100%; height: auto; max-height: 52vh; min-height: 120px; object-fit: contain; }
 .v-caixa { position: absolute; margin: 0; border: 3px solid var(--color-brand); color: var(--color-on-brand); font-size: 12px; font-weight: 900; }
 .v-caixa { text-shadow: 0 0 3px #fff; }
 .v-selo { display: inline-block; padding: var(--space-1) var(--space-4); border-radius: var(--radius-pill); font-weight: 900; }

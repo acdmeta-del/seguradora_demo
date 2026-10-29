@@ -67,29 +67,29 @@ test("enquadramento: sem carro, pequeno, cortado e fora do centro têm motivos p
   assert.deepEqual(P.avaliarEnquadramento({ encontrado: false }, slot("painel-odometro"), L).erros, [], "interno não exige carro");
 });
 
-test("ângulo: frente estreita bloqueia na lateral (confiança alta); lateral x diagonal só avisa", () => {
-  // 640x360: caixa 0,35 x 0,6 → proporção 1,04 (frente/traseira, alta)
-  const frente = P.estimarAngulo(det(0.32, 0.2, 0.35, 0.6), slot("lateral-esquerda"));
-  assert.equal(frente.grupo, "frente-traseira");
+test("ângulo: faixas do 1º teste real; bloqueia só com confiança alta", () => {
+  const caixa = (prop, extra) => det(0.1, 0.2, 0.6, (0.6 * 640) / 360 / prop, extra); // caixa com a proporção pedida
+  // Valores medidos no 1º teste: frente 1,31, traseira 1,37, diagonais 1,46–1,58, laterais 2,36–2,45
+  assert.equal(P.estimarAngulo(caixa(1.31), slot("frente")).grupo, "frente-traseira");
+  assert.equal(P.estimarAngulo(caixa(1.37), slot("traseira")).compativel, true);
+  for (const p of [1.46, 1.53, 1.58]) assert.equal(P.estimarAngulo(caixa(p), slot("diagonal-frontal-esquerda")).grupo, "diagonal", String(p));
+  for (const p of [2.36, 2.45]) assert.equal(P.estimarAngulo(caixa(p), slot("lateral-esquerda")).compativel, true, String(p));
+  // Frente bem estreita no passo da lateral: confiança alta, bloqueia
+  const frente = P.estimarAngulo(caixa(1.1), slot("lateral-esquerda"));
   assert.equal(frente.confianca, "alta");
   assert.equal(P.avaliarAngulo(frente, slot("lateral-esquerda")).erros[0].codigo, "angulo");
-  // Caixa larga (proporção 3,2) no passo "diagonal": subtipo lateral, só aviso
-  const larga = P.estimarAngulo(det(0.1, 0.35, 0.8, 0.25), slot("diagonal-frontal-esquerda"));
-  assert.equal(larga.grupo, "lateral-ou-diagonal");
-  assert.equal(larga.subtipo, "lateral");
-  const r = P.avaliarAngulo(larga, slot("diagonal-frontal-esquerda"));
+  // Lateral (2,4, média) no passo da diagonal: só aviso
+  const r = P.avaliarAngulo(P.estimarAngulo(caixa(2.4), slot("diagonal-frontal-esquerda")), slot("diagonal-frontal-esquerda"));
   assert.deepEqual(r.erros, []);
-  assert.equal(r.avisos[0].codigo, "angulo_subtipo");
-  // Lateral fotografada no passo "frente": confiança média → só aviso, não bloqueia
-  const lateralNaFrente = P.avaliarAngulo(P.estimarAngulo(det(0.1, 0.35, 0.8, 0.25), slot("frente")), slot("frente"));
-  assert.deepEqual(lateralNaFrente.erros, []);
-  assert.equal(lateralNaFrente.avisos[0].codigo, "angulo");
-  // Zona indefinida (proporção ~1,8): sem opinião
-  const meio = P.estimarAngulo(det(0.2, 0.2, 0.6, 0.6 * 640 / 360 / 1.8), slot("frente"));
+  assert.equal(r.avisos[0].codigo, "angulo");
+  // Lateral bem comprida (2,8) no passo da frente: alta, bloqueia
+  assert.equal(P.avaliarAngulo(P.estimarAngulo(caixa(2.8), slot("frente")), slot("frente")).erros.length, 1);
+  // Zona indefinida (~1,95): sem opinião
+  const meio = P.estimarAngulo(caixa(1.95), slot("frente"));
   assert.equal(meio.grupo, "indefinido");
   assert.deepEqual(P.avaliarAngulo(meio, slot("frente")), { erros: [], avisos: [] });
-  // Moto: confiança sempre baixa
-  assert.equal(P.estimarAngulo(det(0.32, 0.2, 0.35, 0.6, { classe: "motorcycle" }), slot("lateral-esquerda")).confianca, "baixa");
+  // Moto: confiança sempre baixa; ângulo interno: sem estimativa
+  assert.equal(P.estimarAngulo(caixa(1.1, { classe: "motorcycle" }), slot("lateral-esquerda")).confianca, "baixa");
   assert.equal(P.estimarAngulo(det(0.3, 0.3, 0.4, 0.4), slot("painel-odometro")), null);
 });
 

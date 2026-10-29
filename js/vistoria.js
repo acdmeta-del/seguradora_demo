@@ -50,7 +50,7 @@
   const el = {
     aviso: $("#v-aviso"),
     telas: { inicio: $("#v-inicio"), captura: $("#v-captura"), resultado: $("#v-resultado"), revisao: $("#v-revisao") },
-    video: $("#v-video"), silhueta: $("#v-silhueta"), camErro: $("#v-camera-erro"),
+    video: $("#v-video"), guia: $("#v-guia"), silhueta: $("#v-silhueta"), camErro: $("#v-camera-erro"),
     nivel: $("#v-nivel"), nivelLinha: $("#v-nivel-linha"), nivelTexto: $("#v-nivel-texto"),
     capturar: $("#v-capturar"), pular: $("#v-pular"), arquivo: $("#v-arquivo"), arquivoRotulo: $("#v-arquivo-rotulo"),
     orientacao: $("#v-orientacao-permitir"),
@@ -64,6 +64,7 @@
   }
   function mostrar(nome) {
     for (const [k, t] of Object.entries(el.telas)) t.hidden = k !== nome;
+    document.body.classList.toggle("v-modo-camera", nome === "captura");
     if (nome !== "captura" && nome !== "resultado") pararCamera();
     window.scrollTo(0, 0);
   }
@@ -232,27 +233,46 @@
     return corrigirPosicao({ fonte: v, largura: v.videoWidth, altura: v.videoHeight, origem: "video" }, inclinacao);
   }
 
-  /* ---------- Silhuetas (SVG simples sobre a câmera) ---------- */
-  const SILHUETAS = {
-    lateral: '<path d="M40 150h22a26 26 0 0 1 52 0h172a26 26 0 0 1 52 0h22v-38l-30-10-50-40H130l-46 38-38 6z"/><circle cx="88" cy="150" r="20"/><circle cx="312" cy="150" r="20"/><path d="M138 70h78v34h-112zM226 70h44l38 34h-82z"/>',
-    frente: '<path d="M110 160v-50l20-54h140l20 54v50"/><path d="M128 104l16-38h112l16 38z"/><rect x="100" y="110" width="200" height="40" rx="8"/><rect x="170" y="128" width="60" height="16" rx="2"/><circle cx="130" cy="124" r="9"/><circle cx="270" cy="124" r="9"/><rect x="112" y="150" width="26" height="18" rx="3"/><rect x="262" y="150" width="26" height="18" rx="3"/>',
-    traseira: '<path d="M110 160v-50l22-54h136l22 54v50"/><path d="M132 104l14-36h108l14 36z"/><rect x="100" y="110" width="200" height="40" rx="8"/><rect x="170" y="130" width="60" height="16" rx="2"/><rect x="112" y="116" width="34" height="12" rx="3"/><rect x="254" y="116" width="34" height="12" rx="3"/><rect x="112" y="150" width="26" height="18" rx="3"/><rect x="262" y="150" width="26" height="18" rx="3"/>',
-    "diagonal-frontal": '<path d="M50 150h14a24 24 0 0 1 48 0h120a22 22 0 0 1 44 0h40v-36l-34-14-40-36H144l-40 32-40 6-14 10z"/><circle cx="88" cy="150" r="18"/><circle cx="254" cy="150" r="17"/><path d="M60 118l44-6M150 70h70l30 30h-110z"/>',
-    "diagonal-traseira": '<path d="M350 150h-14a24 24 0 0 0-48 0H168a22 22 0 0 0-44 0H84v-36l34-14 40-36h98l40 32 40 6 14 10z"/><circle cx="312" cy="150" r="18"/><circle cx="146" cy="150" r="17"/><path d="M340 118l-44-6M250 70h-70l-30 30h110z"/>',
-    painel: '<rect x="70" y="50" width="260" height="110" rx="40"/><circle cx="150" cy="105" r="38"/><circle cx="250" cy="105" r="38"/><rect x="170" y="128" width="60" height="18" rx="3"/>',
-    chassi: '<rect x="60" y="80" width="280" height="50" rx="6"/><path d="M80 105h240" stroke-dasharray="10 8"/>',
-    portamalas: '<path d="M70 160V80l40-30h180l40 30v80z"/><rect x="130" y="95" width="140" height="55" rx="27"/><circle cx="200" cy="122" r="16"/>'
-  };
+  /* ---------- Silhuetas (js/vistoria-silhuetas.js) e guia sobre a câmera ---------- */
+  const SILHUETAS = window.VistoriaSilhuetas || {};
+  // Vídeo em pé com o celular deitado = a imagem chega "de lado" na tela (iPhone com a tela travada em pé)
+  const videoEmPe = () => (el.video.videoHeight || window.innerHeight) > (el.video.videoWidth || window.innerWidth);
+  const giroGuia = (i) => (videoEmPe() && i && i.paisagem && !i.deitado ? i.quarto * 90 : 0);
+
   function renderSilhueta(slot) {
     el.silhueta.hidden = !camadas.silhueta;
     if (!camadas.silhueta) return;
     // Faixa de largura esperada do veículo (ângulos externos), como guia de distância
-    const guia = slot.externo
-      ? `<rect class="v-silhueta__faixa" x="${200 - L.larguraMax * 200}" y="18" width="${L.larguraMax * 400}" height="164"/>
-         <rect class="v-silhueta__faixa" x="${200 - L.larguraMin * 200}" y="18" width="${L.larguraMin * 400}" height="164"/>`
-      : "";
-    el.silhueta.innerHTML = `<svg viewBox="0 0 400 200" preserveAspectRatio="xMidYMid meet">${guia}<g class="v-silhueta__forma"${slot.espelhar ? ' transform="translate(400 0) scale(-1 1)"' : ""}>${SILHUETAS[slot.silhueta] || ""}</g></svg>`;
+    const faixa = (f) => `<rect class="v-silhueta__faixa" x="${200 - f * 200}" y="8" width="${f * 400}" height="209" rx="6"/>`;
+    const guia = slot.externo ? faixa(L.larguraMax) + faixa(L.larguraMin) : "";
+    el.silhueta.innerHTML = `<svg viewBox="0 0 400 225" preserveAspectRatio="xMidYMid meet">${guia}<g class="v-silhueta__forma"${slot.espelhar ? ' transform="translate(400 0) scale(-1 1)"' : ""}>${SILHUETAS[slot.silhueta] || ""}</g></svg>`;
+    posicionarGuia(true);
   }
+
+  /*
+   * A guia ocupa exatamente a área visível do vídeo (object-fit: contain). Se o vídeo chega em
+   * pé com o celular deitado (tela travada em pé), a silhueta gira junto com o mundo, como os
+   * ícones do app de câmera.
+   */
+  let chaveGuia = "";
+  function posicionarGuia(forcar) {
+    const graus = giroGuia(incl.ultimo);
+    const v = el.video;
+    const cw = v.clientWidth, ch = v.clientHeight;
+    const vw = v.videoWidth || cw, vh = v.videoHeight || ch;
+    const chave = [v.offsetLeft, v.offsetTop, cw, ch, vw, vh, graus].join(",");
+    if (!forcar && chave === chaveGuia) return;
+    chaveGuia = chave;
+    const k = Math.min(cw / vw, ch / vh) || 1;
+    const w = vw * k, h = vh * k;
+    Object.assign(el.guia.style, { left: `${v.offsetLeft + (cw - w) / 2}px`, top: `${v.offsetTop + (ch - h) / 2}px`, width: `${w}px`, height: `${h}px` });
+    // Girada: a silhueta fica com as medidas trocadas, centrada, e gira em torno do próprio centro
+    const sw = graus ? h : w, sh = graus ? w : h;
+    Object.assign(el.silhueta.style, { width: `${sw}px`, height: `${sh}px`, left: `${(w - sw) / 2}px`, top: `${(h - sh) / 2}px`, transform: graus ? `rotate(${graus}deg)` : "" });
+  }
+  el.video.addEventListener("loadedmetadata", () => posicionarGuia(true));
+  el.video.addEventListener("resize", () => posicionarGuia(true));
+  window.addEventListener("resize", () => posicionarGuia(true));
 
   /* ---------- Nível do celular (camada inclinação) ---------- */
   function atualizarNivel(i) {
@@ -260,11 +280,12 @@
     if (!camadas.inclinacao || !slot || !slot.externo || el.telas.captura.hidden) { el.nivel.hidden = true; return; }
     el.nivel.hidden = false;
     const r = P.avaliarInclinacao(i, slot, L);
-    el.nivelLinha.style.transform = `rotate(${-i.roll}deg)`;
+    // A linha acompanha o horizonte real; com a tela em pé e o celular deitado, gira 90° junto
+    el.nivelLinha.style.transform = `rotate(${giroGuia(i) + i.roll}deg)`;
     el.nivel.classList.toggle("v-nivel--ok", !r.erros.length);
     el.nivelTexto.textContent = r.erros.length ? (r.erros[0].codigo === "roll" ? `Endireite ${Math.round(Math.abs(i.roll))}°` : "Deixe o celular em pé") : "Reto ✓";
   }
-  incl.aoAtualizar(atualizarNivel);
+  incl.aoAtualizar((i) => { atualizarNivel(i); if (!el.telas.captura.hidden) posicionarGuia(); });
 
   /* ---------- Fluxo ---------- */
   const proximoPendente = (de = 0) => {
@@ -287,8 +308,8 @@
     $("#v-slot-nome").textContent = slot.nome;
     $("#v-slot-instrucao").textContent = slot.instrucao;
     el.pular.hidden = !slot.opcional;
-    renderSilhueta(slot);
     mostrar("captura");
+    renderSilhueta(slot);
     el.orientacao.hidden = !(camadas.inclinacao && slot.externo && incl.precisaPermissao() && !incl.ativo);
     if (incl.ultimo) atualizarNivel(incl.ultimo); else el.nivel.hidden = true;
     if (slot.externo && camadas.deteccao) prepararDetector();
@@ -482,8 +503,8 @@
       ["Veículo", d ? (d.encontrado ? `${d.classe} ${arred(d.score)}` : "não encontrado") : "—", `score ≥ ${L.deteccaoScore}`],
       ["Caixa (x, y, larg., alt.)", d && d.encontrado ? [d.caixa.x, d.caixa.y, d.caixa.w, d.caixa.h].map((v) => arred(v)).join(", ") : "—", `larg. ${L.larguraMin} a ${L.larguraMax}, centro ≤ ${L.centroMax}`],
       ["Detecção (ms)", d ? d.tempoMs : "—", ""],
-      ["Ângulo estimado", a ? `${a.grupo}${a.subtipo ? ` / ${a.subtipo}` : ""} (prop. ${a.proporcao})` : "—", ""],
-      ["Confiança do ângulo", a ? `${a.confianca}${a.subtipo ? ` (subtipo: ${a.confiancaSubtipo})` : ""}` : "—", "bloqueia só com alta"],
+      ["Ângulo estimado", a ? `${a.grupo} (prop. ${a.proporcao})` : "—", "frente/tras. < 1,42 < diagonal < 1,85; lateral ≥ 2,1"],
+      ["Confiança do ângulo", a ? a.confianca : "—", "bloqueia só com alta"],
       ["Análise total (ms)", foto.tempoAnaliseMs, ""],
       ["Tentativa", foto.tentativa, ""]
     ];

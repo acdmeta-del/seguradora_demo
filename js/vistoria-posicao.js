@@ -179,40 +179,38 @@
   }
 
   /* ---------- 3. Estimativa de ângulo (heurística) ----------
-   * Só olha a proporção largura/altura da caixa do veículo, em pixels. Carro de passeio:
-   * frente/traseira ~1,1–1,4; lateral e diagonal ~2,2–3,2 (parecidas entre si: na diagonal
-   * aparecem frente + lateral, e a caixa fica quase tão larga quanto na lateral).
+   * Só olha a proporção largura/altura da caixa do veículo, em pixels. Faixas calibradas no
+   * 1º teste real (hatch, iPhone, ~3 passos): frente 1,31, traseira 1,37, diagonais 1,46–1,58,
+   * laterais 2,36–2,45. Outros carros (sedã, picape, SUV) e distâncias mudam as faixas:
+   * recalibre com mais testes (o relatório traz a proporção de cada foto).
    * O que NÃO dá para saber assim: frente x traseira, esquerda x direita.
-   * Confiança: alta só para "frente/traseira" bem estreita; lateral x diagonal é sempre baixa.
+   * Confiança alta só longe das fronteiras; perto delas, baixa. Moto: sempre baixa.
    */
+  const FAIXAS = [
+    // [até, grupo, alta se <= / >=, média entre]
+    { ate: 1.42, grupo: "frente-traseira", alta: (p) => p <= 1.3, baixa: (p) => p > 1.39 },
+    { ate: 1.85, grupo: "diagonal", alta: () => false, baixa: (p) => p < 1.45 || p > 1.75 },
+    { ate: 2.1, grupo: "indefinido", alta: () => false, baixa: () => true },
+    { ate: Infinity, grupo: "lateral", alta: (p) => p >= 2.5, baixa: (p) => p < 2.2 }
+  ];
   function estimarAngulo(det, slot) {
     if (!slot.externo || !slot.anguloEsperado || !det || !det.encontrado) return null;
     const c = det.caixa, q = det.quadro;
     const proporcao = (c.w * q.largura) / Math.max(1, c.h * q.altura);
-    let grupo, confianca;
-    if (proporcao < 1.45) { grupo = "frente-traseira"; confianca = proporcao < 1.35 ? "alta" : "media"; }
-    else if (proporcao < 2.0) { grupo = "indefinido"; confianca = "baixa"; }
-    else { grupo = "lateral-ou-diagonal"; confianca = proporcao > 2.3 ? "media" : "baixa"; }
+    const faixa = FAIXAS.find((f) => proporcao < f.ate);
+    let confianca = faixa.alta(proporcao) ? "alta" : faixa.baixa(proporcao) ? "baixa" : "media";
     if (det.classe === "motorcycle") confianca = "baixa"; // proporções de moto são outras
-    const subtipo = grupo === "lateral-ou-diagonal" ? (proporcao >= 2.7 ? "lateral" : "diagonal") : null;
-    const esperadoGrupo = slot.anguloEsperado === "frente-traseira" ? "frente-traseira" : "lateral-ou-diagonal";
-    const compativelGrupo = grupo === "indefinido" ? null : grupo === esperadoGrupo;
-    const compativelSubtipo = subtipo && slot.anguloEsperado !== "frente-traseira" ? subtipo === slot.anguloEsperado : null;
-    return { proporcao: Math.round(proporcao * 100) / 100, grupo, subtipo, confianca, confiancaSubtipo: subtipo ? "baixa" : null, compativelGrupo, compativelSubtipo };
+    const compativel = faixa.grupo === "indefinido" ? null : faixa.grupo === slot.anguloEsperado;
+    return { proporcao: Math.round(proporcao * 100) / 100, grupo: faixa.grupo, confianca, compativel };
   }
 
   // Bloqueia só com confiança ALTA; média e baixa apenas avisam
-  const NOMES = { "frente-traseira": "frente ou traseira", "lateral-ou-diagonal": "lateral ou diagonal", lateral: "lateral", diagonal: "diagonal" };
+  const NOMES = { "frente-traseira": "frente ou traseira", lateral: "lateral", diagonal: "diagonal" };
   function avaliarAngulo(est, slot) {
-    if (!est) return { erros: [], avisos: [] };
-    const erros = [], avisos = [];
-    if (est.compativelGrupo === false) {
-      const texto = `O enquadramento parece de ${NOMES[est.grupo]} (confiança ${est.confianca}). Este passo pede: ${slot.nome}.`;
-      (est.confianca === "alta" ? erros : avisos).push(erro("angulo", texto, "angulo"));
-    } else if (est.compativelSubtipo === false) {
-      avisos.push(erro("angulo_subtipo", `Pode ser ${NOMES[est.subtipo]} em vez de ${NOMES[slot.anguloEsperado]} (confiança baixa). Confira o enquadramento.`, "angulo"));
-    }
-    return { erros, avisos };
+    if (!est || est.compativel !== false) return { erros: [], avisos: [] };
+    const texto = `O enquadramento parece de ${NOMES[est.grupo]} (confiança ${est.confianca}). Este passo pede: ${slot.nome}.`;
+    const item = erro("angulo", texto, "angulo");
+    return est.confianca === "alta" ? { erros: [item], avisos: [] } : { erros: [], avisos: [item] };
   }
 
   /* ---------- 4. Ponto de extensão ----------

@@ -80,7 +80,8 @@ compatibilidade da CSP com o diálogo e com `fetch`.
 | `js/vistoria-qualidade.js` | Funções puras: resolução, nitidez (variância do Laplaciano), exposição, contraluz, dHash, duplicada, lado repetido |
 | `js/vistoria-posicao.js` | Nível do celular, detector COCO-SSD, enquadramento, estimativa de ângulo e o ponto de extensão `analisarFoto(imagem, slot)` |
 | `js/vistoria.js` | Interface: câmera, fluxo, revisão, painel dev, relatório JSON/ZIP, IndexedDB com expiração |
-| `css/vistoria.css` | Visual mobile first (botões grandes, contraste para uso no sol) |
+| `js/vistoria-silhuetas.js` | Silhuetas em traço de cada ângulo (frente, traseira, lateral, diagonais, painel, chassi, porta-malas) |
+| `css/vistoria.css` | Visual mobile first: câmera em tela cheia com o disparador dentro da imagem (coluna à direita com a tela deitada), botões grandes, contraste para uso no sol |
 | `js/vendor/tf-4.22.0.min.js`, `js/vendor/coco-ssd-2.2.3.min.js`, `assets/modelos/coco-ssd-lite/` | Detector **local** (~18 MB, baixado só no primeiro ângulo externo). Origem e SHA-256 no `LEIA-ME.md` do modelo |
 
 **Camadas de validação** (todas ligáveis no painel dev; só as marcadas como "reprova" impedem avançar):
@@ -94,7 +95,7 @@ compatibilidade da CSP com o diálogo e com `fetch`.
 | Lado repetido (espelho) | **só avisa** | a mesma lateral ou diagonal tirada duas vezes (compara com o par espelhado, usando o recorte do veículo quando há caixa) | depende do fundo e da iluminação dos dois lados |
 | Inclinação | reprova | celular torto ou apontado para o chão/céu | no iPhone exige tocar em "Ativar nível"; sem sensor, a camada fica sem opinião |
 | Detecção (COCO-SSD) | reprova | sem carro, carro pequeno, cortado na borda, fora do centro | não serve para painel, chassi e porta-malas (só ângulos externos); 1 a 3 s por foto no celular |
-| Ângulo (proporção da caixa) | reprova só com confiança **alta** | frente/traseira x lateral/diagonal | **não** distingue frente de traseira nem esquerda de direita; lateral x diagonal é sempre confiança baixa |
+| Ângulo (proporção da caixa) | reprova só com confiança **alta** | frente/traseira (até 1,42) x diagonal (1,42 a 1,85) x lateral (a partir de 2,1), faixas do 1º teste real (hatch) | **não** distingue frente de traseira nem esquerda de direita; sedã, picape e SUV podem cair em outras faixas: recalibrar com mais testes |
 
 O modo `?dev=1` mostra as métricas medidas e os limites de cada foto e a caixa do veículo. Ele também libera sliders para ajustar os limites ao vivo (a revisão mostra se cada foto "aprovaria" com os novos valores), além de "Exportar configuração ajustada", "Enviar arquivo" e "Forçar aceitar". O relatório (JSON, ou ZIP com as miniaturas) traz, por foto, o status, os motivos, os avisos, as métricas, as tentativas e os tempos de captura e de análise. Traz também um resumo de quantas vezes cada camada reprovou ou avisou. Os itens do modo dev estão marcados no código com `FASE 2: REMOVER`.
 

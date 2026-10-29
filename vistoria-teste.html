@@ -43,29 +43,36 @@
       </div>
     </section>
 
-    <!-- 2. Captura -->
-    <section class="v-tela" id="v-captura" aria-labelledby="v-slot-nome" hidden>
-      <div class="v-progresso">
-        <div class="v-progresso__barra" role="progressbar" aria-labelledby="v-progresso-texto" aria-valuemin="0" aria-valuemax="11" aria-valuenow="0"><span id="v-progresso-fill"></span></div>
-        <p id="v-progresso-texto"></p>
-      </div>
-      <h2 id="v-slot-nome"></h2>
-      <p class="v-instrucao" id="v-slot-instrucao"></p>
+    <!-- 2. Captura: câmera em tela cheia, com o disparador dentro da área da câmera -->
+    <section class="v-tela v-tela--camera" id="v-captura" aria-labelledby="v-slot-nome" hidden>
       <div class="v-camera" id="v-camera">
         <video id="v-video" playsinline muted autoplay></video>
-        <div class="v-silhueta" id="v-silhueta" aria-hidden="true"></div>
+        <!-- Guia: ocupa exatamente a área visível do vídeo (posicionada pelo script) -->
+        <div class="v-guia" id="v-guia" aria-hidden="true"><div class="v-silhueta" id="v-silhueta"></div></div>
+        <div class="v-cam-topo">
+          <div class="v-progresso">
+            <div class="v-progresso__barra" role="progressbar" aria-labelledby="v-progresso-texto" aria-valuemin="0" aria-valuemax="11" aria-valuenow="0"><span id="v-progresso-fill"></span></div>
+            <p id="v-progresso-texto"></p>
+          </div>
+          <h2 id="v-slot-nome"></h2>
+          <p class="v-instrucao" id="v-slot-instrucao"></p>
+          <button class="v-chip" type="button" id="v-orientacao-permitir" hidden>Ativar nível do celular</button>
+        </div>
         <div class="v-nivel" id="v-nivel" hidden aria-live="polite"><span class="v-nivel__linha" id="v-nivel-linha"></span><span class="v-nivel__texto" id="v-nivel-texto"></span></div>
         <p class="v-camera__erro" id="v-camera-erro" hidden></p>
-      </div>
-      <div class="v-acoes">
-        <button class="btn btn--primary btn--block v-btn-grande" type="button" id="v-capturar">Tirar foto</button>
-        <button class="btn btn--outline btn--block" type="button" id="v-pular" hidden>Pular (não se aplica)</button>
-        <!-- FASE 2: REMOVER (envio de arquivo só no ?dev=1) -->
-        <label class="btn btn--outline btn--block v-dev-only" id="v-arquivo-rotulo" hidden>Enviar arquivo (dev)
-          <input type="file" id="v-arquivo" accept="image/*" class="visually-hidden">
-        </label>
-        <button class="btn btn--outline btn--block" type="button" id="v-orientacao-permitir" hidden>Ativar nível do celular</button>
-        <button class="v-link" type="button" id="v-ver-revisao">Ver todas as fotos</button>
+        <div class="v-cam-base">
+          <div class="v-cam-lado">
+            <button class="v-chip" type="button" id="v-ver-revisao">Fotos</button>
+          </div>
+          <button class="v-disparador" type="button" id="v-capturar" aria-label="Tirar foto"><span aria-hidden="true"></span></button>
+          <div class="v-cam-lado">
+            <button class="v-chip" type="button" id="v-pular" hidden>Pular</button>
+            <!-- FASE 2: REMOVER (envio de arquivo só no ?dev=1) -->
+            <label class="v-chip v-dev-only" id="v-arquivo-rotulo" hidden>Arquivo·dev
+              <input type="file" id="v-arquivo" accept="image/*" class="visually-hidden">
+            </label>
+          </div>
+        </div>
       </div>
     </section>
 
@@ -112,6 +119,7 @@
   <script src="js/vistoria-config.js"></script>
   <script src="js/vistoria-qualidade.js"></script>
   <script src="js/vistoria-posicao.js"></script>
+  <script src="js/vistoria-silhuetas.js"></script>
   <script src="js/vistoria.js"></script>
 </body>
 </html>

@@ -31,7 +31,7 @@ window.VISTORIA_CONFIG = {
   limites: {
     resolucaoMaior: 1280,    // px, lado maior
     resolucaoMenor: 720,     // px, lado menor
-    nitidez: 60,             // variância do Laplaciano (imagem de 640 px)
+    nitidez: 60,             // variância do Laplaciano (imagem de 640 px; iPhone nítido: 2.000–8.000)
     nitidezCentro: 90,       // região central (odômetro, chassi)
     lumMin: 60,              // luminância média (0–255)
     lumMax: 200,
@@ -42,9 +42,9 @@ window.VISTORIA_CONFIG = {
     parecidaDist: 10,        // até aqui = "muito parecida" (aviso)
     espelhoMargem: 4,        // lado repetido: direto melhor que espelhado por esta margem (aviso)
     rollMax: 8,              // graus: horizonte inclinado
-    pitchMax: 15,            // graus: celular apontado para cima/baixo
+    pitchMax: 25,            // graus: celular apontado para cima/baixo (1º teste: 6–13° ao enquadrar)
     deteccaoScore: 0.5,      // confiança mínima do detector
-    larguraMin: 0.55,        // largura da caixa do veículo / largura do quadro
+    larguraMin: 0.5,         // largura da caixa do veículo / largura do quadro (1º teste: 0,57–0,87)
     larguraMax: 0.9,
     centroMax: 0.15,         // distância do centro da caixa ao centro do quadro
     margemBorda: 0.02        // caixa encostada na borda = veículo cortado
