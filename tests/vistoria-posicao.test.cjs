@@ -19,9 +19,9 @@ test("inclinação: em pé (retrato e paisagem) fica reto; torto e deitado são 
   const torto = P.inclinacaoDe(70, -90);
   perto(Math.abs(torto.roll), 20);
   assert.equal(P.avaliarInclinacao(torto, slot("frente"), L).erros[0].codigo, "roll");
-  // Inclinado para trás 30° (câmera apontando para o chão)
-  const paraBaixo = P.inclinacaoDe(60, 0);
-  perto(paraBaixo.pitch, 30);
+  // Inclinado para trás 40° (câmera apontando para o chão; limite 35°)
+  const paraBaixo = P.inclinacaoDe(50, 0);
+  perto(paraBaixo.pitch, 40);
   assert.match(P.avaliarInclinacao(paraBaixo, slot("frente"), L).erros[0].texto, /chão/);
   assert.equal(P.inclinacaoDe(0, 0).deitado, true, "celular na mesa");
   assert.deepEqual(P.avaliarInclinacao(torto, slot("painel-odometro"), L).erros, [], "painel não exige nível");
@@ -120,44 +120,69 @@ test("enquadramento por tipo: moto de frente usa o maior lado; outro tipo de ve�
 
 test("continuidade: trilha contínua não avisa; veículo perdido, salto e pausa se comportam", () => {
   const caixa = (x, y = 0.3, w = 0.4, h = 0.4) => ({ x, y, w, h });
-  // Gera a trilha a partir de quadros [ms, caixas] usando passoTrilha
+  const A = "0123456789abcdef", B = "fedcba9876543210"; // aparências bem diferentes (dHash)
+  // Gera a trilha a partir de quadros [ms, [[caixa, hash]...], aspecto?] usando passoTrilha
   const trilha = (quadros) => {
-    let ultimo = null;
-    return quadros.map(([t, caixas]) => {
-      const p = P.passoTrilha(ultimo, caixas.map((c) => ({ classe: "car", score: 0.9, caixa: c })), t, L);
-      if (p.caixa) ultimo = { caixa: p.caixa, t };
-      return p;
+    let estado = null;
+    return quadros.map(([t, vs, aspecto = 16 / 9]) => {
+      const r = P.passoTrilha(estado, vs.map(([c, h = A]) => ({ classe: "car", score: 0.9, caixa: c, hash: h })), t, aspecto, L);
+      estado = r.estado;
+      return r.amostra;
     });
   };
   const de = (n, f) => Array.from({ length: n }, (_, i) => f(i));
-  // Andando em volta: a caixa se desloca aos poucos (5% por olhada)
-  const continua = trilha(de(16, (i) => [i * 500, [caixa(0.1 + i * 0.03)]]));
-  const ok = P.avaliarContinuidade(continua, 0, 8000, "Frente", L);
+  const avaliar = (am, fim, pausas) => P.avaliarContinuidade(am, 0, fim, "Frente", L, pausas);
+  // Andando em volta: a caixa se desloca aos poucos
+  const ok = avaliar(trilha(de(16, (i) => [i * 500, [[caixa(0.1 + i * 0.03)]]])), 8000);
   assert.deepEqual(ok.avisos, []);
   assert.equal(ok.metricas.visivelPct, 100);
-  assert.equal(ok.metricas.saltos, 0);
   assert.match(ok.metricas.linha, /^\|+$/);
-  // Veículo fora da câmera por 7 s (limite 6 s)
-  const perdido = trilha([...de(4, (i) => [i * 500, [caixa(0.3)]]), ...de(14, (i) => [2000 + i * 500, []]), [9500, [caixa(0.3)]]]);
-  const r1 = P.avaliarContinuidade(perdido, 0, 10000, "Frente", L);
-  assert.deepEqual(r1.avisos.map((a) => a.codigo), ["lacuna"]);
-  assert.match(r1.avisos[0].texto, /saiu da câmera por 8 s entre “Frente”/);
-  // Salto: de um canto para o outro de uma olhada para a seguinte, sem sobreposição
-  const salto = trilha([...de(6, (i) => [i * 500, [caixa(0.02, 0.3, 0.3, 0.3)]]), ...de(6, (i) => [3000 + i * 500, [caixa(0.68, 0.3, 0.3, 0.3)]])]);
-  const r2 = P.avaliarContinuidade(salto, 0, 6000, "Lateral esquerda", L);
-  assert.deepEqual(r2.avisos.map((a) => a.codigo), ["salto"]);
-  assert.match(r2.metricas.linha, /x/);
-  // Com dois veículos no quadro, a trilha segue o que continua (maior sobreposição), sem salto
-  const dois = trilha(de(8, (i) => [i * 500, [caixa(0.7, 0.3, 0.2, 0.2), caixa(0.1 + i * 0.02)]]));
-  assert.equal(P.avaliarContinuidade(dois, 0, 4000, "Frente", L).metricas.saltos, 0);
+  // Veículo fora da câmera por 8 s (limite 6 s)
+  const perdido = avaliar(trilha([...de(4, (i) => [i * 500, [[caixa(0.3)]]]), ...de(14, (i) => [2000 + i * 500, []]), [9500, [[caixa(0.3)]]]]), 10000);
+  assert.deepEqual(perdido.avisos.map((a) => a.codigo), ["lacuna"]);
+  assert.match(perdido.avisos[0].texto, /saiu da câmera por 8 s entre “Frente”/);
+  // Salto para OUTRO veículo: some num canto, aparece no outro e se firma, com outra aparência
+  const salto = avaliar(trilha([...de(6, (i) => [i * 500, [[caixa(0.02, 0.3, 0.3, 0.3)]]]), ...de(6, (i) => [3000 + i * 500, [[caixa(0.68, 0.3, 0.3, 0.3), B]]])]), 6000);
+  assert.deepEqual(salto.avisos.map((a) => a.codigo), ["salto"]);
+  assert.match(salto.metricas.linha, /\?\?x/);
+  // Olhadas com intervalo irregular (o detector às vezes demora): o salto continua sendo pego
+  const irregular = avaliar(trilha([...de(4, (i) => [i * 500, [[caixa(0.02, 0.3, 0.3, 0.3)]]]), [1900, [[caixa(0.68, 0.3, 0.3, 0.3), B]]], [2500, [[caixa(0.68, 0.3, 0.3, 0.3), B]]], [3300, [[caixa(0.69, 0.3, 0.3, 0.3), B]]]]), 4000);
+  assert.deepEqual(irregular.avisos.map((a) => a.codigo), ["salto"], irregular.metricas.linha);
+  // Mesmo salto, mas com a MESMA aparência (giro rápido do celular): retoma, sem aviso
+  const giro = avaliar(trilha([...de(6, (i) => [i * 500, [[caixa(0.02, 0.3, 0.3, 0.3)]]]), ...de(6, (i) => [3000 + i * 500, [[caixa(0.68, 0.3, 0.3, 0.3), A]]])]), 6000);
+  assert.deepEqual(giro.avisos, []);
+  assert.match(giro.metricas.linha, /r/);
+  // 2º teste com moto: o detector perde a moto por 1–2 olhadas e só vê uma moto ao fundo: não é salto
+  const fundo = [caixa(0.75, 0.1, 0.12, 0.15), B];
+  const vulto = avaliar(trilha(de(16, (i) => [i * 500, i === 5 || i === 9 || i === 10 ? [fundo] : [[caixa(0.25 + i * 0.01)], fundo]])), 8000);
+  assert.deepEqual(vulto.avisos, [], vulto.metricas.linha);
+  assert.equal(vulto.metricas.saltos, 0);
+  // Celular girou (retrato <-> paisagem): recomeça a trilha, sem salto
+  const girou = avaliar(trilha([...de(6, (i) => [i * 500, [[caixa(0.3, 0.2, 0.4, 0.6)]], 9 / 16]), ...de(6, (i) => [3000 + i * 500, [[caixa(0.05, 0.1, 0.3, 0.8), B]], 16 / 9])]), 6000);
+  assert.equal(girou.metricas.saltos, 0);
+  // Com dois veículos no quadro, a trilha segue o que continua (maior sobreposição)
+  assert.equal(avaliar(trilha(de(8, (i) => [i * 500, [[caixa(0.7, 0.3, 0.2, 0.2), B], [caixa(0.1 + i * 0.02)]]])), 4000).metricas.saltos, 0);
   // Pausa (olhando o resultado de uma tentativa): o tempo sem olhadas não conta
-  const comPausa = trilha([...de(4, (i) => [i * 500, [caixa(0.3)]]), [11000, [caixa(0.32)]], [11500, [caixa(0.33)]]]);
-  assert.deepEqual(P.avaliarContinuidade(comPausa, 0, 12000, "Frente", L, [[1600, 10900]]).avisos, []);
-  assert.equal(P.avaliarContinuidade(comPausa, 0, 12000, "Frente", L).avisos[0].codigo, "lacuna");
+  const comPausa = trilha([...de(4, (i) => [i * 500, [[caixa(0.3)]]]), [11000, [[caixa(0.32)]]], [11500, [[caixa(0.33)]]]]);
+  assert.deepEqual(avaliar(comPausa, 12000, [[1600, 10900]]).avisos, []);
+  assert.equal(avaliar(comPausa, 12000).avisos[0].codigo, "lacuna");
   // Trajeto curto demais: sem opinião
   assert.equal(P.avaliarContinuidade([], 0, 1000, "Frente", L), null);
   assert.ok(Math.abs(P.iou(caixa(0.1), caixa(0.1)) - 1) < 1e-9);
   assert.equal(P.iou(caixa(0), caixa(0.6)), 0);
+});
+
+test("moto: tamanho pelo maior lado em todos os ângulos externos (2º teste: diagonal traseira 36% x 88%)", () => {
+  const moto = CFG.tipos.moto;
+  for (const s of moto.slots.filter((x) => x.externo)) assert.equal(s.medida, "maior", s.id);
+  const diag = moto.slots.find((x) => x.id === "moto-diagonal-traseira-direita");
+  const d = det(0.338, 0.103, 0.36, 0.876, { classe: "motorcycle" });
+  assert.deepEqual(P.avaliarEnquadramento(d, diag, L, moto).erros, []);
+  // Proporção medida (0,73) cai em "diagonal"
+  const e = P.estimarAngulo({ ...d, quadro: { largura: 640, altura: 360 } }, diag, moto.faixasAngulo, moto);
+  assert.equal(e.grupo, "diagonal");
+  // Inclinação de 28,6° (moto mais baixa) passa
+  assert.deepEqual(P.avaliarInclinacao({ pitch: 28.6, roll: 2.1, paisagem: true, quarto: 1, deitado: false }, diag, L).erros, []);
 });
 
 test("ponto de extensão analisarFoto existe e, por enquanto, não opina", async () => {

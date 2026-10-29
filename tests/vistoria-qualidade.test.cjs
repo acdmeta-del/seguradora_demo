@@ -60,6 +60,7 @@ test("exposição: escura, clara, estourada e contraluz têm motivos próprios",
   const contraluz = medir(imagem(320, 180, (x, y) => (x > 80 && x < 240 && y > 45 && y < 135 ? ((x + y) % 2 ? 50 : 70) : (x + y) % 2 ? 200 : 230)));
   assert.ok(contraluz.contraluz < L.contraluzRazao, String(contraluz.contraluz));
   assert.ok(codigos(Q.avaliarQualidade(contraluz, slot("frente"), L)).includes("contraluz"));
+  assert.ok(!codigos(Q.avaliarQualidade(contraluz, slot("moto-painel"), L)).includes("contraluz"), "painel: céu claro atrás é normal");
 });
 
 test("resolução e orientação: baixa resolução e retrato reprovam nos ângulos externos", () => {

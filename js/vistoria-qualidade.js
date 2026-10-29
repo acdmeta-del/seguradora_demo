@@ -157,7 +157,8 @@
     else if (m.media > L.lumMax) erros.push(erro("clara", MSG.clara()));
     if (m.estourados > L.estouradosMax) erros.push(erro("estourados", MSG.estourados()));
     if (m.escuros > L.escurosMax && m.media >= L.lumMin) erros.push(erro("escuros", MSG.escuros()));
-    if (m.contraluz < L.contraluzRazao && m.media >= L.lumMin) erros.push(erro("contraluz", MSG.contraluz()));
+    // Contraluz só nos ângulos externos: no painel é comum o céu claro atrás (2º teste com moto)
+    if (slot.externo && m.contraluz < L.contraluzRazao && m.media >= L.lumMin) erros.push(erro("contraluz", MSG.contraluz()));
     return { erros, avisos };
   }
 

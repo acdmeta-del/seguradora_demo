@@ -478,7 +478,8 @@ test("continuidade: segue o veículo entre as fotos; avisa veículo perdido e sa
     window.tf = { getBackend: () => "falso" };
     window.cocoSsd = { load: async () => ({ detect: async (el) => window.__caixas.map(([x, y, w, h]) => ({ class: "car", score: 0.9, bbox: [x * el.width, y * el.height, w * el.width, h * el.height] })) }) };
   };
-  const ajustes = { limites: { continuidadeLacunaMaxS: 2 }, camadas: {} };
+  // Aparência: qualquer diferença conta (o vídeo falso não tem um "veículo" de verdade)
+  const ajustes = { limites: { continuidadeLacunaMaxS: 2, continuidadeAparenciaMin: -1 }, camadas: {} };
   const { page, requests } = await abrir(t, { ajustes, initScript });
   const caixas = (c) => page.evaluate((v) => { window.__caixas = v; }, c);
   const olhadas = (n) => page.waitForFunction((x) => window.__vistoria.olhadas >= x, n, { timeout: 15000 });
@@ -524,7 +525,7 @@ test("continuidade: segue o veículo entre as fotos; avisa veículo perdido e sa
   await caixas([[0.02, 0.3, 0.3, 0.3]]);
   await page.waitForTimeout(1500);
   await caixas([[0.68, 0.3, 0.3, 0.3]]);
-  await page.waitForTimeout(1200);
+  await page.waitForTimeout(2200); // precisa se firmar por 3 olhadas
   await caixas(LATERAL);
   await page.waitForTimeout(600);
   await enviar(page, cena(14));

@@ -44,7 +44,7 @@ window.VISTORIA_CONFIG = {
     parecidaDist: 10,        // até aqui = "muito parecida" (aviso)
     espelhoMargem: 4,        // lado repetido: direto melhor que espelhado por esta margem (aviso)
     rollMax: 8,              // graus: horizonte inclinado
-    pitchMax: 25,            // graus: celular apontado para cima/baixo (1º teste: 6–13° ao enquadrar)
+    pitchMax: 35,            // graus: celular apontado para cima/baixo (carro: 6–13°; moto, mais baixa: 19–29°)
     deteccaoScore: 0.5,      // confiança mínima do detector
     larguraMin: 0.5,         // largura da caixa do veículo / largura do quadro (1º teste: 0,57–0,87)
     larguraMax: 0.9,
@@ -63,7 +63,9 @@ window.VISTORIA_CONFIG = {
     continuidadeLacunaMaxS: 6,    // veículo fora da câmera por mais que isso: aviso
     continuidadeIouMin: 0.05,     // sobreposição mínima entre olhadas seguidas
     continuidadeSaltoCentro: 0.4, // ...e o centro andou mais que isso (fração do quadro) = salto
-    continuidadeSaltoJanelaS: 1.5 // só conta salto entre olhadas com até N s de diferença
+    continuidadeSaltoJanelaS: 1.5, // só conta salto entre olhadas com até N s de diferença
+    continuidadeConfirmar: 3,     // veículo em outro ponto precisa se firmar por N olhadas (ignora vultos ao fundo)
+    continuidadeAparenciaMin: 20  // dHash do recorte: diferença acima disso = outra aparência (0–64)
   },
 
   // Sliders do painel dev: [chave, rótulo, mínimo, máximo, passo]
@@ -94,7 +96,8 @@ window.VISTORIA_CONFIG = {
     ["intervaloMaxMin", "Mesmo veículo: intervalo máximo (min)", 5, 240, 5],
     ["continuidadeLacunaMaxS", "Continuidade: tempo máximo fora da câmera (s)", 1, 60, 1],
     ["continuidadeIouMin", "Continuidade: sobreposição mínima", 0, 0.5, 0.01],
-    ["continuidadeSaltoCentro", "Continuidade: salto do centro", 0.1, 0.9, 0.05]
+    ["continuidadeSaltoCentro", "Continuidade: salto do centro", 0.1, 0.9, 0.05],
+    ["continuidadeAparenciaMin", "Continuidade: diferença de aparência no salto", 0, 64, 1]
   ],
 
   // Carimbo no rodapé de cada foto. PERSONALIZAR: logo da Integra em versão clara (fundo transparente)
@@ -178,25 +181,27 @@ window.VISTORIA_CONFIG = {
       // Cor NÃO serve para moto: a caixa é quase toda fundo, pneus e peças pretas
       // (2º teste: duas motos diferentes ficaram 0,73–0,82 parecidas)
       compararCor: false,
-      faixasAngulo: [ // estimativa inicial, sem calibrar
-        { ate: 0.8, grupo: "frente-traseira" },
-        { ate: 1.35, grupo: "diagonal" },
-        { ate: 1.55, grupo: "indefinido" },
+      // Proporções medidas em 2 testes (3 motos): frente/traseira 0,41–0,53; diagonais 0,73 e 1,11;
+      // laterais 1,24–1,59. Ainda poucas medidas: confiança sempre baixa (só avisa)
+      faixasAngulo: [
+        { ate: 0.62, grupo: "frente-traseira" },
+        { ate: 1.18, grupo: "diagonal" },
+        { ate: 1.22, grupo: "indefinido" },
         { ate: 99, grupo: "lateral" }
       ],
       espelhos: [["moto-lateral-esquerda", "moto-lateral-direita"]],
       slots: [
-        { id: "moto-frente", nome: "Frente", silhueta: "moto-frente", orientacao: "qualquer", externo: true, anguloEsperado: "frente-traseira", medida: "maior", largura: [0.55, 0.92],
+        { id: "moto-frente", nome: "Frente", silhueta: "moto-frente", orientacao: "qualquer", externo: true, anguloEsperado: "frente-traseira", medida: "maior", largura: [0.5, 0.95],
           instrucao: "Fique de frente para a moto, a uns 2 passos. Pegue do pneu ao retrovisor. Pode ser com o celular em pé.", codigoTipoSgaPendente: null },
-        { id: "moto-traseira", nome: "Traseira", silhueta: "moto-traseira", orientacao: "qualquer", externo: true, anguloEsperado: "frente-traseira", medida: "maior", largura: [0.55, 0.92],
+        { id: "moto-traseira", nome: "Traseira", silhueta: "moto-traseira", orientacao: "qualquer", externo: true, anguloEsperado: "frente-traseira", medida: "maior", largura: [0.5, 0.95],
           instrucao: "Vá para trás da moto, a uns 2 passos. A placa e a lanterna devem aparecer.", codigoTipoSgaPendente: null },
-        { id: "moto-lateral-esquerda", nome: "Lateral esquerda", silhueta: "moto-lateral", orientacao: "paisagem", externo: true, anguloEsperado: "lateral", largura: [0.5, 0.92],
+        { id: "moto-lateral-esquerda", nome: "Lateral esquerda", silhueta: "moto-lateral", orientacao: "paisagem", externo: true, anguloEsperado: "lateral", medida: "maior", largura: [0.5, 0.95],
           instrucao: "Do lado esquerdo, afaste-se até a moto caber inteira, de uma roda à outra.", codigoTipoSgaPendente: null },
-        { id: "moto-lateral-direita", nome: "Lateral direita", silhueta: "moto-lateral", espelhar: true, orientacao: "paisagem", externo: true, anguloEsperado: "lateral", largura: [0.5, 0.92],
+        { id: "moto-lateral-direita", nome: "Lateral direita", silhueta: "moto-lateral", espelhar: true, orientacao: "paisagem", externo: true, anguloEsperado: "lateral", medida: "maior", largura: [0.5, 0.95],
           instrucao: "Do lado direito (do escapamento, na maioria), afaste-se até a moto caber inteira.", codigoTipoSgaPendente: null },
-        { id: "moto-diagonal-frontal-esquerda", nome: "Diagonal frontal esquerda", silhueta: "moto-diagonal-frontal", orientacao: "paisagem", externo: true, anguloEsperado: "diagonal", largura: [0.4, 0.92],
+        { id: "moto-diagonal-frontal-esquerda", nome: "Diagonal frontal esquerda", silhueta: "moto-diagonal-frontal", orientacao: "paisagem", externo: true, anguloEsperado: "diagonal", medida: "maior", largura: [0.5, 0.95],
           instrucao: "Na quina da frente, do lado esquerdo. Pegue a frente e a lateral juntas.", codigoTipoSgaPendente: null },
-        { id: "moto-diagonal-traseira-direita", nome: "Diagonal traseira direita", silhueta: "moto-diagonal-traseira", espelhar: true, orientacao: "paisagem", externo: true, anguloEsperado: "diagonal", largura: [0.4, 0.92],
+        { id: "moto-diagonal-traseira-direita", nome: "Diagonal traseira direita", silhueta: "moto-diagonal-traseira", espelhar: true, orientacao: "paisagem", externo: true, anguloEsperado: "diagonal", medida: "maior", largura: [0.5, 0.95],
           instrucao: "Na quina de trás, do lado direito. Pegue a traseira e a lateral juntas.", codigoTipoSgaPendente: null },
         { id: "moto-painel", nome: "Painel com odômetro", silhueta: "moto-painel", orientacao: "qualquer", externo: false, legibilidade: true,
           instrucao: "Com a moto ligada, enquadre o painel. A quilometragem deve ficar no centro e legível.", codigoTipoSgaPendente: null },

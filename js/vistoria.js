@@ -355,7 +355,7 @@
    */
   function iniciarTrilha(slot) {
     estado.trilha = camadas.continuidade && slot.externo
-      ? { inicio: Date.now(), deNome: slot.nome, amostras: [], ultimo: null, pausas: [], pausaDesde: null }
+      ? { inicio: Date.now(), deNome: slot.nome, amostras: [], rastro: null, pausas: [], pausaDesde: null }
       : null;
   }
   function fimPausaTrilha() {
@@ -386,14 +386,20 @@
       const k = Math.min(1, 320 / Math.max(v.videoWidth, v.videoHeight));
       canvasTrilha.width = Math.round(v.videoWidth * k);
       canvasTrilha.height = Math.round(v.videoHeight * k);
-      canvasTrilha.getContext("2d").drawImage(v, 0, 0, canvasTrilha.width, canvasTrilha.height);
+      const ctx = canvasTrilha.getContext("2d", { willReadFrequently: true });
+      ctx.drawImage(v, 0, 0, canvasTrilha.width, canvasTrilha.height);
       const veiculos = await detector.detectarVarios(canvasTrilha, canvasTrilha.width, canvasTrilha.height, L.deteccaoScore);
       const t = estado.trilha;
       if (!t || veiculos == null) return;
-      const passo = P.passoTrilha(t.ultimo, veiculos, Date.now(), L);
-      t.amostras.push(passo);
+      // Aparência de cada veículo (dHash do recorte): separa "mesmo veículo" de "outro" num salto
+      if (veiculos.length) {
+        const cinza = Q.paraCinza(ctx.getImageData(0, 0, canvasTrilha.width, canvasTrilha.height));
+        for (const vv of veiculos) vv.hash = Q.dHash(cinza, { regiao: vv.caixa });
+      }
+      const r = P.passoTrilha(t.rastro, veiculos, Date.now(), canvasTrilha.width / canvasTrilha.height, L);
+      t.rastro = r.estado;
+      t.amostras.push(r.amostra);
       if (t.amostras.length > 1200) t.amostras.shift(); // ~10 min
-      if (passo.caixa) t.ultimo = { caixa: passo.caixa, t: passo.t };
     } catch { /* uma olhada perdida não atrapalha */ } finally {
       amostrando = false;
     }
@@ -653,7 +659,7 @@
       ["Mesmo veículo: cor (mediana)", r.extras.mesmoVeiculo && r.extras.mesmoVeiculo.corMediana != null ? r.extras.mesmoVeiculo.corMediana : "—", `aviso < ${L.corSemelhancaMin}`],
       ["Mesmo veículo: distância / tempo", r.extras.mesmoVeiculo ? `${r.extras.mesmoVeiculo.distanciaM ?? "—"} m / ${r.extras.mesmoVeiculo.intervaloMin ?? "—"} min` : "—", `aviso > ${L.distanciaMaxM} m ou > ${L.intervaloMaxMin} min`],
       ["Continuidade", r.extras.continuidade ? (({ deSlot, duracaoS, visivelPct, maiorLacunaS, saltos }) => `desde “${deSlot}”: ${duracaoS} s, veículo à vista ${visivelPct}%, maior lacuna ${maiorLacunaS} s, ${saltos} salto(s)`)(r.extras.continuidade) : "—", `aviso: lacuna > ${L.continuidadeLacunaMaxS} s ou salto`],
-      ["Trilha (| à vista, . fora, x salto)", r.extras.continuidade ? r.extras.continuidade.linha || "(sem olhadas)" : "—", `1 olhada a cada ${CFG.limites.continuidadeIntervaloMs} ms`],
+      ["Trilha (| à vista, . fora, ? outro ponto, r retomou, x salto)", r.extras.continuidade ? r.extras.continuidade.linha || "(sem olhadas)" : "—", `1 olhada a cada ${CFG.limites.continuidadeIntervaloMs} ms`],
       ["Análise total (ms)", foto.tempoAnaliseMs, ""],
       ["Tentativa", foto.tentativa, ""]
     ];

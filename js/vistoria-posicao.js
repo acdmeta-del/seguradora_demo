@@ -248,31 +248,66 @@
   }
   const centro = (c) => ({ x: c.x + c.w / 2, y: c.y + c.h / 2 });
 
-  /*
-   * Um passo da trilha: escolhe, entre os veículos do quadro, o que continua o anterior.
-   *   anterior: { caixa, t } da última amostra com veículo (ou null) · veiculos: detectarVarios()
-   * Salto = veículo de novo à vista, pouco tempo depois, mas sem sobreposição e longe do anterior.
-   */
-  function passoTrilha(anterior, veiculos, t, L) {
-    const lista = veiculos || [];
-    if (!lista.length) return { t, n: 0, caixa: null, iou: null, salto: false };
-    if (!anterior) {
-      const maior = lista.reduce((m, v) => (v.caixa.w * v.caixa.h > m.caixa.w * m.caixa.h ? v : m));
-      return { t, n: lista.length, caixa: maior.caixa, iou: null, salto: false };
-    }
-    const melhor = lista.reduce((m, v) => (iou(v.caixa, anterior.caixa) > iou(m.caixa, anterior.caixa) ? v : m));
-    const sobreposicao = iou(melhor.caixa, anterior.caixa);
-    const ca = centro(anterior.caixa), cb = centro(melhor.caixa);
-    const distancia = Math.hypot(cb.x - ca.x, cb.y - ca.y);
-    const recente = (t - anterior.t) / 1000 <= L.continuidadeSaltoJanelaS;
-    const salto = recente && sobreposicao < L.continuidadeIouMin && distancia > L.continuidadeSaltoCentro;
-    return { t, n: lista.length, caixa: melhor.caixa, iou: Math.round(sobreposicao * 100) / 100, salto };
+  // Distância entre dois dHash (hex): quantos bits diferem (null se faltar algum)
+  function distanciaHash(a, b) {
+    if (!a || !b || a.length !== b.length) return null;
+    let d = 0;
+    for (let i = 0; i < a.length; i++) { let x = parseInt(a[i], 16) ^ parseInt(b[i], 16); while (x) { d += x & 1; x >>= 1; } }
+    return d;
   }
+  const maiorCaixa = (l) => l.reduce((m, v) => (v.caixa.w * v.caixa.h > m.caixa.w * m.caixa.h ? v : m));
 
   /*
-   * Resumo da trilha entre a foto anterior (inicio) e a captura atual (fim), em ms.
-   * amostras: resultados de passoTrilha. Sem amostras suficientes: sem opinião (null).
+   * Um passo da trilha. Segue o veículo pela sobreposição das caixas (IoU) com a última olhada.
+   * Para não confundir com veículos ao fundo (2º teste com moto: 4 alarmes falsos), um veículo
+   * em outro ponto só vira a trilha se se firmar por L.continuidadeConfirmar olhadas seguidas;
+   * e só é SALTO se apareceu logo depois de perder o anterior, longe dele e com OUTRA aparência
+   * (dHash do recorte: em meio segundo o mesmo veículo quase não muda de aparência).
+   *   estado: { ultimo: { caixa, t, hash, aspecto }, cand } (null no começo)
+   *   veiculos: [{ caixa, hash }] · aspecto: largura/altura do quadro (mudou = celular girou)
+   * Devolve { amostra, estado }. amostra.caixa = veículo da trilha nesta olhada (ou null).
    */
+  function passoTrilha(estado, veiculos, t, aspecto, L) {
+    const e = { ultimo: estado ? estado.ultimo : null, cand: estado ? estado.cand : null };
+    const lista = veiculos || [];
+    const amostra = (caixa, extra) => ({ t, n: lista.length, caixa, salto: false, ...extra });
+    // Celular girou (retrato <-> paisagem): as posições no quadro mudam todas; recomeça a trilha
+    if (e.ultimo && Math.abs(e.ultimo.aspecto - aspecto) > 0.05) { e.ultimo = null; e.cand = null; }
+    if (!lista.length) return { amostra: amostra(null), estado: e };
+    if (!e.ultimo) {
+      const v = maiorCaixa(lista);
+      e.ultimo = { caixa: v.caixa, t, hash: v.hash, aspecto };
+      e.cand = null;
+      return { amostra: amostra(v.caixa), estado: e };
+    }
+    const melhor = lista.reduce((m, v) => (iou(v.caixa, e.ultimo.caixa) > iou(m.caixa, e.ultimo.caixa) ? v : m));
+    const sobreposicao = iou(melhor.caixa, e.ultimo.caixa);
+    // Sem candidato pendente e perdido há tempo: retoma (a lacuna já é contada à parte).
+    // Com candidato pendente, quem decide é a hora em que ele apareceu (abaixo).
+    const perdidoHaTempo = !e.cand && (t - e.ultimo.t) / 1000 > L.continuidadeSaltoJanelaS;
+    if (sobreposicao >= L.continuidadeIouMin || perdidoHaTempo) {
+      // Continua (ou retoma depois de uma lacuna, que já é contada à parte)
+      e.ultimo = { caixa: melhor.caixa, t, hash: melhor.hash, aspecto };
+      e.cand = null;
+      return { amostra: amostra(melhor.caixa, { iou: Math.round(sobreposicao * 100) / 100 }), estado: e };
+    }
+    // Veículo em outro ponto, sem sobreposição: candidato, até se firmar
+    const novo = maiorCaixa(lista);
+    e.cand = e.cand && iou(e.cand.caixa, novo.caixa) >= 0.3
+      ? { ...e.cand, caixa: novo.caixa, n: e.cand.n + 1 }
+      : { caixa: novo.caixa, hash: novo.hash, n: 1, desde: t };
+    if (e.cand.n < L.continuidadeConfirmar) return { amostra: amostra(null, { pendente: true }), estado: e };
+    const ca = centro(e.ultimo.caixa), cb = centro(e.cand.caixa);
+    const longe = Math.hypot(cb.x - ca.x, cb.y - ca.y) > L.continuidadeSaltoCentro;
+    const rapido = (e.cand.desde - e.ultimo.t) / 1000 <= L.continuidadeSaltoJanelaS;
+    const aparencia = distanciaHash(e.ultimo.hash, e.cand.hash);
+    const outraAparencia = aparencia == null || aparencia > L.continuidadeAparenciaMin;
+    const salto = longe && rapido && outraAparencia;
+    e.ultimo = { caixa: e.cand.caixa, t, hash: e.cand.hash, aspecto };
+    e.cand = null;
+    return { amostra: amostra(e.ultimo.caixa, { salto, retomada: !salto, aparencia }), estado: e };
+  }
+
   // Tempo entre a e b, descontando as pausas ([início, fim] em ms) que caem nesse trecho
   function tempoAtivo(a, b, pausas) {
     let t = b - a;
@@ -298,7 +333,8 @@
       deSlot: nomeAnterior, duracaoS: Math.round(duracaoS * 10) / 10, amostras: amostras.length,
       visivelPct: amostras.length ? Math.round((vistos / amostras.length) * 100) : 0,
       maiorLacunaS: Math.round(maiorLacunaMs / 100) / 10, saltos,
-      linha: amostras.map((a) => (a.salto ? "x" : a.caixa ? "|" : ".")).join("")
+      // | à vista · . fora · ? outro ponto, esperando firmar · r retomou (mesma aparência) · x salto
+      linha: amostras.map((a) => (a.salto ? "x" : a.retomada ? "r" : a.caixa ? "|" : a.pendente ? "?" : ".")).join("")
     };
     const avisos = [];
     if (saltos) avisos.push(erro("salto", `A câmera pulou de repente para outro ponto entre “${nomeAnterior}” e esta foto: confira se é o mesmo veículo.`, "continuidade"));
