@@ -190,6 +190,15 @@
       const predicoes = await modelo.detect(fonte, 10, 0.2);
       return { ...principalVeiculo(predicoes, largura, altura, cfgDeteccao.classes), tempoMs: Date.now() - t0 };
     };
+    // Todos os veículos do quadro (caixas normalizadas), para a continuidade
+    det.detectarVarios = async function (fonte, largura, altura, scoreMin) {
+      if (det.estado !== "pronto") return null;
+      const predicoes = await modelo.detect(fonte, 10, scoreMin);
+      return predicoes.filter((p) => cfgDeteccao.classes.includes(p.class)).map((p) => ({
+        classe: p.class, score: p.score,
+        caixa: { x: p.bbox[0] / largura, y: p.bbox[1] / altura, w: p.bbox[2] / largura, h: p.bbox[3] / altura }
+      }));
+    };
     return det;
   }
 
@@ -223,6 +232,82 @@
     return est.confianca === "alta" ? { erros: [item], avisos: [] } : { erros: [], avisos: [item] };
   }
 
+  /* ---------- 5. Continuidade entre as fotos ----------
+   * Entre uma foto aceita e a próxima, a câmera continua aberta e o detector olha o vídeo
+   * ~2 vezes por segundo (só no aparelho, nada é gravado nem enviado). A trilha segue o
+   * veículo pela sobreposição das caixas (IoU). Avisa se o veículo sumiu por muito tempo ou
+   * se a câmera "pulou" para outro lugar de repente (outro veículo?). Só AVISA.
+   */
+  function iou(a, b) {
+    if (!a || !b) return 0;
+    const x0 = Math.max(a.x, b.x), y0 = Math.max(a.y, b.y);
+    const x1 = Math.min(a.x + a.w, b.x + b.w), y1 = Math.min(a.y + a.h, b.y + b.h);
+    const inter = Math.max(0, x1 - x0) * Math.max(0, y1 - y0);
+    const uniao = a.w * a.h + b.w * b.h - inter;
+    return uniao > 0 ? inter / uniao : 0;
+  }
+  const centro = (c) => ({ x: c.x + c.w / 2, y: c.y + c.h / 2 });
+
+  /*
+   * Um passo da trilha: escolhe, entre os veículos do quadro, o que continua o anterior.
+   *   anterior: { caixa, t } da última amostra com veículo (ou null) · veiculos: detectarVarios()
+   * Salto = veículo de novo à vista, pouco tempo depois, mas sem sobreposição e longe do anterior.
+   */
+  function passoTrilha(anterior, veiculos, t, L) {
+    const lista = veiculos || [];
+    if (!lista.length) return { t, n: 0, caixa: null, iou: null, salto: false };
+    if (!anterior) {
+      const maior = lista.reduce((m, v) => (v.caixa.w * v.caixa.h > m.caixa.w * m.caixa.h ? v : m));
+      return { t, n: lista.length, caixa: maior.caixa, iou: null, salto: false };
+    }
+    const melhor = lista.reduce((m, v) => (iou(v.caixa, anterior.caixa) > iou(m.caixa, anterior.caixa) ? v : m));
+    const sobreposicao = iou(melhor.caixa, anterior.caixa);
+    const ca = centro(anterior.caixa), cb = centro(melhor.caixa);
+    const distancia = Math.hypot(cb.x - ca.x, cb.y - ca.y);
+    const recente = (t - anterior.t) / 1000 <= L.continuidadeSaltoJanelaS;
+    const salto = recente && sobreposicao < L.continuidadeIouMin && distancia > L.continuidadeSaltoCentro;
+    return { t, n: lista.length, caixa: melhor.caixa, iou: Math.round(sobreposicao * 100) / 100, salto };
+  }
+
+  /*
+   * Resumo da trilha entre a foto anterior (inicio) e a captura atual (fim), em ms.
+   * amostras: resultados de passoTrilha. Sem amostras suficientes: sem opinião (null).
+   */
+  // Tempo entre a e b, descontando as pausas ([início, fim] em ms) que caem nesse trecho
+  function tempoAtivo(a, b, pausas) {
+    let t = b - a;
+    for (const [p0, p1] of pausas || []) t -= Math.max(0, Math.min(b, p1) - Math.max(a, p0));
+    return Math.max(0, t);
+  }
+
+  function avaliarContinuidade(amostras, inicio, fim, nomeAnterior, L, pausas) {
+    const duracaoS = tempoAtivo(inicio, fim, pausas) / 1000;
+    if (duracaoS < L.continuidadeMinS) return null;
+    // Lacuna = maior trecho sem veículo (fora das pausas), contando o começo e o fim do trajeto
+    let maiorLacunaMs = 0, ultimoVisto = inicio, vistos = 0, saltos = 0;
+    for (const a of amostras) {
+      if (a.caixa) {
+        maiorLacunaMs = Math.max(maiorLacunaMs, tempoAtivo(ultimoVisto, a.t, pausas));
+        ultimoVisto = a.t;
+        vistos++;
+      }
+      if (a.salto) saltos++;
+    }
+    maiorLacunaMs = Math.max(maiorLacunaMs, tempoAtivo(ultimoVisto, fim, pausas));
+    const metricas = {
+      deSlot: nomeAnterior, duracaoS: Math.round(duracaoS * 10) / 10, amostras: amostras.length,
+      visivelPct: amostras.length ? Math.round((vistos / amostras.length) * 100) : 0,
+      maiorLacunaS: Math.round(maiorLacunaMs / 100) / 10, saltos,
+      linha: amostras.map((a) => (a.salto ? "x" : a.caixa ? "|" : ".")).join("")
+    };
+    const avisos = [];
+    if (saltos) avisos.push(erro("salto", `A câmera pulou de repente para outro ponto entre “${nomeAnterior}” e esta foto: confira se é o mesmo veículo.`, "continuidade"));
+    if (metricas.maiorLacunaS > L.continuidadeLacunaMaxS) {
+      avisos.push(erro("lacuna", `O veículo saiu da câmera por ${Math.round(metricas.maiorLacunaS)} s entre “${nomeAnterior}” e esta foto: confira se é o mesmo veículo. Dica: ande apontando o celular para ele.`, "continuidade"));
+    }
+    return { metricas, avisos };
+  }
+
   /* ---------- 4. Ponto de extensão ----------
    * analisarFoto(imagem, slot): plugue aqui um modelo de visão mais robusto (ex.: classificador
    * de ângulo treinado com fotos de vistoria) ou, na Fase 2, um serviço externo.
@@ -235,5 +320,5 @@
     return null;
   }
 
-  return { inclinacaoDe, rotacaoNecessaria, avaliarInclinacao, criarInclinacao, principalVeiculo, avaliarEnquadramento, criarDetector, estimarAngulo, avaliarAngulo, analisarFoto };
+  return { inclinacaoDe, rotacaoNecessaria, avaliarInclinacao, criarInclinacao, principalVeiculo, avaliarEnquadramento, criarDetector, estimarAngulo, avaliarAngulo, iou, passoTrilha, avaliarContinuidade, analisarFoto };
 });

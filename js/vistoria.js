@@ -52,6 +52,8 @@
     historico: [],        // cada tentativa: camadas que reprovaram/avisaram (para comparar camadas)
     geoAtual: null,       // última posição do GPS (obrigatória para tirar foto)
     geoErro: null,
+    trilha: null,         // continuidade: { inicio, deNome, amostras, ultimo, pausas, pausaDesde }
+    capturando: false,
     stream: null
   };
   const incl = P.criarInclinacao();
@@ -62,7 +64,7 @@
     telas: { inicio: $("#v-inicio"), captura: $("#v-captura"), resultado: $("#v-resultado"), revisao: $("#v-revisao") },
     video: $("#v-video"), guia: $("#v-guia"), silhueta: $("#v-silhueta"), camErro: $("#v-camera-erro"),
     nivel: $("#v-nivel"), nivelLinha: $("#v-nivel-linha"), nivelTexto: $("#v-nivel-texto"),
-    geoStatus: $("#v-geo-status"), geoErro: $("#v-geo-erro"),
+    geoStatus: $("#v-geo-status"), geoErro: $("#v-geo-erro"), trilhaStatus: $("#v-trilha-status"),
     capturar: $("#v-capturar"), pular: $("#v-pular"), arquivo: $("#v-arquivo"), arquivoRotulo: $("#v-arquivo-rotulo"),
     orientacao: $("#v-orientacao-permitir"),
     previa: $("#v-previa-img"), caixa: $("#v-caixa"), status: $("#v-status"), metricas: $("#v-metricas"),
@@ -347,6 +349,58 @@
   }
   incl.aoAtualizar((i) => { atualizarNivel(i); if (!el.telas.captura.hidden) posicionarGuia(); });
 
+  /* ---------- Continuidade entre as fotos (vistoria-posicao.js, seção 5) ----------
+   * Começa quando uma foto de ângulo externo é aceita e segue até a próxima captura.
+   * O tempo olhando o resultado de uma tentativa (antes de "Tirar de novo") é pausa: não conta.
+   */
+  function iniciarTrilha(slot) {
+    estado.trilha = camadas.continuidade && slot.externo
+      ? { inicio: Date.now(), deNome: slot.nome, amostras: [], ultimo: null, pausas: [], pausaDesde: null }
+      : null;
+  }
+  function fimPausaTrilha() {
+    const t = estado.trilha;
+    if (t && t.pausaDesde) { t.pausas.push([t.pausaDesde, Date.now()]); t.pausaDesde = null; }
+  }
+  const trilhaAtiva = () => {
+    const slot = slots[estado.indice];
+    return Boolean(camadas.continuidade && estado.trilha && slot && slot.externo);
+  };
+  function atualizarTrilhaStatus() {
+    const ativa = trilhaAtiva() && !el.telas.captura.hidden;
+    el.trilhaStatus.hidden = !ativa || detector.estado !== "pronto";
+    if (el.trilhaStatus.hidden) return;
+    const a = estado.trilha.amostras[estado.trilha.amostras.length - 1];
+    const vendo = Boolean(a && a.caixa);
+    el.trilhaStatus.textContent = vendo ? "🔗 Acompanhando o veículo" : "🔗 Aponte para o veículo";
+    el.trilhaStatus.classList.toggle("v-chip--ok", vendo);
+  }
+  let amostrando = false;
+  const canvasTrilha = document.createElement("canvas");
+  async function amostrarTrilha() {
+    atualizarTrilhaStatus();
+    const v = el.video;
+    if (amostrando || estado.capturando || !trilhaAtiva() || el.telas.captura.hidden || document.hidden || detector.estado !== "pronto" || !v.videoWidth) return;
+    amostrando = true;
+    try {
+      const k = Math.min(1, 320 / Math.max(v.videoWidth, v.videoHeight));
+      canvasTrilha.width = Math.round(v.videoWidth * k);
+      canvasTrilha.height = Math.round(v.videoHeight * k);
+      canvasTrilha.getContext("2d").drawImage(v, 0, 0, canvasTrilha.width, canvasTrilha.height);
+      const veiculos = await detector.detectarVarios(canvasTrilha, canvasTrilha.width, canvasTrilha.height, L.deteccaoScore);
+      const t = estado.trilha;
+      if (!t || veiculos == null) return;
+      const passo = P.passoTrilha(t.ultimo, veiculos, Date.now(), L);
+      t.amostras.push(passo);
+      if (t.amostras.length > 1200) t.amostras.shift(); // ~10 min
+      if (passo.caixa) t.ultimo = { caixa: passo.caixa, t: passo.t };
+    } catch { /* uma olhada perdida não atrapalha */ } finally {
+      amostrando = false;
+    }
+    atualizarTrilhaStatus();
+  }
+  setInterval(amostrarTrilha, CFG.limites.continuidadeIntervaloMs);
+
   /* ---------- Fluxo ---------- */
   const proximoPendente = (de = 0) => {
     for (let k = 0; k < slots.length; k++) {
@@ -357,6 +411,7 @@
   };
 
   async function irPara(indice) {
+    fimPausaTrilha();
     estado.indice = indice;
     const slot = slots[indice];
     estado.inicioSlot[slot.id] = estado.inicioSlot[slot.id] || Date.now();
@@ -395,19 +450,28 @@
     const slot = slots[estado.indice];
     if (!geoOk()) { atualizarBotao(); return; } // localização obrigatória
     el.capturar.disabled = true;
+    estado.capturando = true;
     el.status.textContent = "";
     try {
       const quando = Date.now();                                    // horário do clique (carimbo)
       const geo = { ...estado.geoAtual, idadeS: Math.round((quando - estado.geoAtual.recebidoEm) / 1000) };
       const inclinacao = incl.ultimo ? { ...incl.ultimo } : null; // no momento do clique
+      // Trajeto desde a foto anterior até este clique (continuidade); a análise que vem é pausa
+      // Sem detector pronto não há olhadas: sem opinião (não vira "veículo fora da câmera")
+      const t = trilhaAtiva() && detector.estado === "pronto" ? estado.trilha : null;
+      const trilha = t ? { inicio: t.inicio, fim: quando, deNome: t.deNome, amostras: t.amostras.slice(), pausas: t.pausas.slice() } : null;
+      if (t) t.pausaDesde = quando;
       const foto = origemArquivo ? await deArquivo(origemArquivo) : await tirarFoto(inclinacao);
       estado.tentativas[slot.id] = (estado.tentativas[slot.id] || 0) + 1;
       mostrarResultadoCarregando(slot);
       estado.pendente = await analisar(foto, slot, inclinacao, quando, geo);
+      estado.pendente.trilha = trilha;
       if (foto.fonte && foto.fonte.close) foto.fonte.close();
       avaliarEExibir();
       banco.salvarMeta();
+      estado.capturando = false;
     } catch (e) {
+      estado.capturando = false;
       erroCamera(e.message || "Não foi possível tirar a foto.");
       mostrar("captura");
       atualizarBotao();
@@ -483,6 +547,10 @@
       const r = Q.avaliarMesmoVeiculo(resumo(foto), outras, L);
       extras.mesmoVeiculo = r.comparacao;
       juntar(r);
+    }
+    if (camadas.continuidade && foto.trilha) {
+      const r = P.avaliarContinuidade(foto.trilha.amostras, foto.trilha.inicio, foto.trilha.fim, foto.trilha.deNome, L, foto.trilha.pausas);
+      if (r) { extras.continuidade = r.metricas; juntar(r); }
     }
     // Localização obrigatória (sempre presente); precisão ruim só avisa
     if (foto.geo && foto.geo.precisaoM > L.geoPrecisaoMaxM) {
@@ -584,11 +652,13 @@
       ["Carimbo", foto.carimbo || "—", CFG.carimbo.rotuloFuso],
       ["Mesmo veículo: cor (mediana)", r.extras.mesmoVeiculo && r.extras.mesmoVeiculo.corMediana != null ? r.extras.mesmoVeiculo.corMediana : "—", `aviso < ${L.corSemelhancaMin}`],
       ["Mesmo veículo: distância / tempo", r.extras.mesmoVeiculo ? `${r.extras.mesmoVeiculo.distanciaM ?? "—"} m / ${r.extras.mesmoVeiculo.intervaloMin ?? "—"} min` : "—", `aviso > ${L.distanciaMaxM} m ou > ${L.intervaloMaxMin} min`],
+      ["Continuidade", r.extras.continuidade ? (({ deSlot, duracaoS, visivelPct, maiorLacunaS, saltos }) => `desde “${deSlot}”: ${duracaoS} s, veículo à vista ${visivelPct}%, maior lacuna ${maiorLacunaS} s, ${saltos} salto(s)`)(r.extras.continuidade) : "—", `aviso: lacuna > ${L.continuidadeLacunaMaxS} s ou salto`],
+      ["Trilha (| à vista, . fora, x salto)", r.extras.continuidade ? r.extras.continuidade.linha || "(sem olhadas)" : "—", `1 olhada a cada ${CFG.limites.continuidadeIntervaloMs} ms`],
       ["Análise total (ms)", foto.tempoAnaliseMs, ""],
       ["Tentativa", foto.tentativa, ""]
     ];
     el.metricas.innerHTML = `<table><caption>Métricas medidas x limites</caption><thead><tr><th>Medida</th><th>Valor</th><th>Limite</th></tr></thead><tbody>${
-      linhas.map(([k, v, lim]) => `<tr><th scope="row">${esc(k)}</th><td>${esc(v)}</td><td>${esc(lim)}</td></tr>`).join("")}</tbody></table>`;
+      linhas.map(([k, v, lim]) => `<tr><th scope="row">${esc(k)}</th><td${k.startsWith("Trilha") ? ' class="v-trilha-linha"' : ""}>${esc(v)}</td><td>${esc(lim)}</td></tr>`).join("")}</tbody></table>`;
     el.metricas.hidden = false;
   }
 
@@ -603,6 +673,7 @@
     estado.fotos.set(foto.slotId, foto);
     estado.pendente = null;
     delete estado.inicioSlot[foto.slotId];
+    iniciarTrilha(slots.find((s) => s.id === foto.slotId) || {});
     await banco.salvarFoto(foto);
     await banco.salvarMeta();
     avancar();
@@ -616,6 +687,7 @@
     const slot = slots[estado.indice];
     const foto = { slotId: slot.id, status: "pulada", salvaEm: Date.now(), capturadaEm: new Date().toISOString(), tentativa: estado.tentativas[slot.id] || 0 };
     estado.fotos.set(slot.id, foto);
+    estado.trilha = null;
     await banco.salvarFoto(foto);
     avancar();
   }
@@ -766,6 +838,7 @@
     estado.tentativas = {};
     estado.historico = [];
     estado.inicioSlot = {};
+    estado.trilha = null;
     await banco.limpar();
     $("#v-retomada").hidden = true;
     $("#v-ir-revisao").hidden = true;
@@ -784,7 +857,7 @@
       if (!el.telas.revisao.hidden) renderRevisao();
       if (!el.telas.captura.hidden) renderSilhueta(slots[estado.indice]);
     };
-    const nomes = { qualidade: "Qualidade", mesmoVeiculo: "Mesmo veículo (aviso)", duplicada: "Duplicada (aviso)", espelho: "Lado repetido (aviso)", silhueta: "Silhueta", inclinacao: "Inclinação", deteccao: "Detecção do veículo", angulo: "Ângulo estimado" };
+    const nomes = { qualidade: "Qualidade", mesmoVeiculo: "Mesmo veículo (aviso)", continuidade: "Continuidade (aviso)", duplicada: "Duplicada (aviso)", espelho: "Lado repetido (aviso)", silhueta: "Silhueta", inclinacao: "Inclinação", deteccao: "Detecção do veículo", angulo: "Ângulo estimado" };
     $("#v-camadas").insertAdjacentHTML("beforeend", Object.keys(camadas).map((k) =>
       `<label class="v-check"><input type="checkbox" data-camada="${k}"${camadas[k] ? " checked" : ""}> ${esc(nomes[k] || k)}</label>`).join(""));
     $("#v-camadas").addEventListener("change", (e) => {
@@ -865,5 +938,5 @@
   setInterval(expirar, 60 * 1000);
 
   // Gancho só para os testes automáticos (não expõe fotos nem dados)
-  window.__vistoria = { get estadoDetector() { return detector.estado; } };
+  window.__vistoria = { get estadoDetector() { return detector.estado; }, get olhadas() { return estado.trilha ? estado.trilha.amostras.length : 0; } };
 })();

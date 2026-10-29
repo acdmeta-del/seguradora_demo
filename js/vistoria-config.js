@@ -16,6 +16,7 @@ window.VISTORIA_CONFIG = {
     qualidade: true,   // resolução, nitidez, exposição, orientação
     duplicada: true,   // hash perceptual entre fotos (só avisa)
     mesmoVeiculo: true, // cor, tipo, distância e tempo entre as fotos: outro veículo? (só avisa)
+    continuidade: true, // acompanha o veículo pela câmera entre uma foto e outra (só avisa)
     espelho: true,     // laterais e diagonais: pega o mesmo lado fotografado duas vezes (só avisa)
     silhueta: true,    // guia visual sobre a câmera
     inclinacao: true,  // celular reto (DeviceOrientationEvent)
@@ -55,7 +56,14 @@ window.VISTORIA_CONFIG = {
     // Mesmo veículo em todas as fotos (só avisam)
     corSemelhancaMin: 0.6,   // 1º teste: mesmo carro 0,71–0,99; cinza-escuro ~0,49; vermelho/azul ~0,28 (prata x branco não separa)
     distanciaMaxM: 150,      // foto longe das outras
-    intervaloMaxMin: 45      // foto muito depois da primeira
+    intervaloMaxMin: 45,     // foto muito depois da primeira
+    // Continuidade entre as fotos (só avisa): o detector acompanha o veículo pelo vídeo
+    continuidadeIntervaloMs: 500, // uma olhada a cada N ms
+    continuidadeMinS: 2,          // trajeto mais curto que isso: sem opinião
+    continuidadeLacunaMaxS: 6,    // veículo fora da câmera por mais que isso: aviso
+    continuidadeIouMin: 0.05,     // sobreposição mínima entre olhadas seguidas
+    continuidadeSaltoCentro: 0.4, // ...e o centro andou mais que isso (fração do quadro) = salto
+    continuidadeSaltoJanelaS: 1.5 // só conta salto entre olhadas com até N s de diferença
   },
 
   // Sliders do painel dev: [chave, rótulo, mínimo, máximo, passo]
@@ -83,7 +91,10 @@ window.VISTORIA_CONFIG = {
     ["geoPrecisaoMaxM", "GPS: precisão para aviso (m)", 10, 500, 10],
     ["corSemelhancaMin", "Mesmo veículo: semelhança de cor mínima", 0.2, 0.95, 0.05],
     ["distanciaMaxM", "Mesmo veículo: distância máxima (m)", 20, 2000, 10],
-    ["intervaloMaxMin", "Mesmo veículo: intervalo máximo (min)", 5, 240, 5]
+    ["intervaloMaxMin", "Mesmo veículo: intervalo máximo (min)", 5, 240, 5],
+    ["continuidadeLacunaMaxS", "Continuidade: tempo máximo fora da câmera (s)", 1, 60, 1],
+    ["continuidadeIouMin", "Continuidade: sobreposição mínima", 0, 0.5, 0.01],
+    ["continuidadeSaltoCentro", "Continuidade: salto do centro", 0.1, 0.9, 0.05]
   ],
 
   // Carimbo no rodapé de cada foto. PERSONALIZAR: logo da Integra em versão clara (fundo transparente)

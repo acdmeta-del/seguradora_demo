@@ -78,6 +78,9 @@ body.v-modo-camera { overflow: hidden; }
 .v-cam-topo .v-chip { min-height: 36px; border-color: var(--color-brand); }
 .v-chip--geo { cursor: default; border-color: #FFD54F !important; color: #FFD54F; }
 .v-chip--geo.v-chip--ok { border-color: var(--color-brand) !important; color: #fff; }
+.v-chip--trilha { cursor: default; border-color: #FFD54F !important; color: #FFD54F; }
+.v-chip--trilha.v-chip--ok { border-color: var(--color-brand) !important; color: #fff; }
+.v-trilha-linha { font-family: ui-monospace, Menlo, monospace; letter-spacing: 1px; overflow-wrap: anywhere; }
 .v-camera__erro--geo { top: auto; bottom: calc(env(safe-area-inset-bottom) + 170px); }
 
 /* Início: tipo de veículo e aviso de localização obrigatória */

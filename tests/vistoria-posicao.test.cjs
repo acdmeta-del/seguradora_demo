@@ -118,6 +118,48 @@ test("enquadramento por tipo: moto de frente usa o maior lado; outro tipo de ve�
   assert.deepEqual(P.avaliarEnquadramento(det(0.025, 0.2, 0.95, 0.5, { classe: "truck" }), cam.slots[2], L, cam).erros, []);
 });
 
+test("continuidade: trilha contínua não avisa; veículo perdido, salto e pausa se comportam", () => {
+  const caixa = (x, y = 0.3, w = 0.4, h = 0.4) => ({ x, y, w, h });
+  // Gera a trilha a partir de quadros [ms, caixas] usando passoTrilha
+  const trilha = (quadros) => {
+    let ultimo = null;
+    return quadros.map(([t, caixas]) => {
+      const p = P.passoTrilha(ultimo, caixas.map((c) => ({ classe: "car", score: 0.9, caixa: c })), t, L);
+      if (p.caixa) ultimo = { caixa: p.caixa, t };
+      return p;
+    });
+  };
+  const de = (n, f) => Array.from({ length: n }, (_, i) => f(i));
+  // Andando em volta: a caixa se desloca aos poucos (5% por olhada)
+  const continua = trilha(de(16, (i) => [i * 500, [caixa(0.1 + i * 0.03)]]));
+  const ok = P.avaliarContinuidade(continua, 0, 8000, "Frente", L);
+  assert.deepEqual(ok.avisos, []);
+  assert.equal(ok.metricas.visivelPct, 100);
+  assert.equal(ok.metricas.saltos, 0);
+  assert.match(ok.metricas.linha, /^\|+$/);
+  // Veículo fora da câmera por 7 s (limite 6 s)
+  const perdido = trilha([...de(4, (i) => [i * 500, [caixa(0.3)]]), ...de(14, (i) => [2000 + i * 500, []]), [9500, [caixa(0.3)]]]);
+  const r1 = P.avaliarContinuidade(perdido, 0, 10000, "Frente", L);
+  assert.deepEqual(r1.avisos.map((a) => a.codigo), ["lacuna"]);
+  assert.match(r1.avisos[0].texto, /saiu da câmera por 8 s entre “Frente”/);
+  // Salto: de um canto para o outro de uma olhada para a seguinte, sem sobreposição
+  const salto = trilha([...de(6, (i) => [i * 500, [caixa(0.02, 0.3, 0.3, 0.3)]]), ...de(6, (i) => [3000 + i * 500, [caixa(0.68, 0.3, 0.3, 0.3)]])]);
+  const r2 = P.avaliarContinuidade(salto, 0, 6000, "Lateral esquerda", L);
+  assert.deepEqual(r2.avisos.map((a) => a.codigo), ["salto"]);
+  assert.match(r2.metricas.linha, /x/);
+  // Com dois veículos no quadro, a trilha segue o que continua (maior sobreposição), sem salto
+  const dois = trilha(de(8, (i) => [i * 500, [caixa(0.7, 0.3, 0.2, 0.2), caixa(0.1 + i * 0.02)]]));
+  assert.equal(P.avaliarContinuidade(dois, 0, 4000, "Frente", L).metricas.saltos, 0);
+  // Pausa (olhando o resultado de uma tentativa): o tempo sem olhadas não conta
+  const comPausa = trilha([...de(4, (i) => [i * 500, [caixa(0.3)]]), [11000, [caixa(0.32)]], [11500, [caixa(0.33)]]]);
+  assert.deepEqual(P.avaliarContinuidade(comPausa, 0, 12000, "Frente", L, [[1600, 10900]]).avisos, []);
+  assert.equal(P.avaliarContinuidade(comPausa, 0, 12000, "Frente", L).avisos[0].codigo, "lacuna");
+  // Trajeto curto demais: sem opinião
+  assert.equal(P.avaliarContinuidade([], 0, 1000, "Frente", L), null);
+  assert.ok(Math.abs(P.iou(caixa(0.1), caixa(0.1)) - 1) < 1e-9);
+  assert.equal(P.iou(caixa(0), caixa(0.6)), 0);
+});
+
 test("ponto de extensão analisarFoto existe e, por enquanto, não opina", async () => {
   assert.equal(await P.analisarFoto({}, slot("frente")), null);
 });

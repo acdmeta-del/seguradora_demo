@@ -470,3 +470,76 @@ test("tipos de veículo: moto e caminhão têm lista e silhueta próprias; troca
   assert.match(await page.locator("#v-progresso-texto").innerText(), /Foto 1 de 12 · 0 pronta/);
   assert.match(await page.locator("#v-slot-instrucao").innerText(), /cabine/);
 });
+
+test("continuidade: segue o veículo entre as fotos; avisa veículo perdido e salto; pausa no resultado não conta", async (t) => {
+  // Detector falso (o modelo real não vê veículo em imagem sintética): devolve as caixas de window.__caixas
+  const initScript = () => {
+    window.__caixas = [];
+    window.tf = { getBackend: () => "falso" };
+    window.cocoSsd = { load: async () => ({ detect: async (el) => window.__caixas.map(([x, y, w, h]) => ({ class: "car", score: 0.9, bbox: [x * el.width, y * el.height, w * el.width, h * el.height] })) }) };
+  };
+  const ajustes = { limites: { continuidadeLacunaMaxS: 2 }, camadas: {} };
+  const { page, requests } = await abrir(t, { ajustes, initScript });
+  const caixas = (c) => page.evaluate((v) => { window.__caixas = v; }, c);
+  const olhadas = (n) => page.waitForFunction((x) => window.__vistoria.olhadas >= x, n, { timeout: 15000 });
+  const aceitar = async () => { await page.click("#v-aceitar"); await page.locator("#v-captura").waitFor({ state: "visible" }); };
+  const FRENTE = [[0.22, 0.12, 0.56, 0.76]], LATERAL = [[0.08, 0.3, 0.84, 0.4]];
+
+  await page.click("#v-comecar");
+  await caixas(FRENTE);
+  await enviar(page, cena(11));
+  assert.match(await esperarResultado(page), /Aprovada/);
+  await aceitar();
+
+  // Traseira: veículo sempre à vista → sem aviso. Antes, uma tentativa refeita com 3 s parado no resultado
+  await olhadas(4);
+  assert.match(await page.locator("#v-trilha-status").innerText(), /Acompanhando o veículo/);
+  await enviar(page, cena(12));
+  await esperarResultado(page);
+  await caixas([]);
+  await page.waitForTimeout(3000);   // olhando o resultado (pausa): não conta como lacuna
+  await page.click("#v-refazer");
+  await page.locator("#v-captura").waitFor({ state: "visible" });
+  await caixas(FRENTE);
+  await page.waitForTimeout(1200);
+  await enviar(page, cena(12));
+  let status = await esperarResultado(page);
+  assert.doesNotMatch(status, /saiu da câmera|pulou/, status);
+  assert.match(await page.locator("#v-metricas").innerText(), /desde “Frente”/);
+  await aceitar();
+
+  // Lateral esquerda: veículo some por ~3 s (limite 2 s) → aviso
+  await caixas([]);
+  await page.waitForTimeout(3000);
+  assert.match(await page.locator("#v-trilha-status").innerText(), /Aponte para o veículo/);
+  await caixas(LATERAL);
+  await page.waitForTimeout(1000);
+  await enviar(page, cena(13));
+  status = await esperarResultado(page);
+  assert.match(status, /Aprovada/, "continuidade só avisa");
+  assert.match(status, /O veículo saiu da câmera por \d+ s entre “Traseira”/);
+  await aceitar();
+
+  // Lateral direita: a caixa pula de um canto ao outro → aviso de salto
+  await caixas([[0.02, 0.3, 0.3, 0.3]]);
+  await page.waitForTimeout(1500);
+  await caixas([[0.68, 0.3, 0.3, 0.3]]);
+  await page.waitForTimeout(1200);
+  await caixas(LATERAL);
+  await page.waitForTimeout(600);
+  await enviar(page, cena(14));
+  status = await esperarResultado(page);
+  assert.match(status, /A câmera pulou de repente para outro ponto entre “Lateral esquerda”/);
+  assert.match(await page.locator("#v-metricas").innerText(), /x/);
+  await aceitar();
+
+  // Relatório traz a continuidade de cada trecho
+  await page.click("#v-ver-revisao");
+  const [dj] = await Promise.all([page.waitForEvent("download"), page.click("#v-relatorio")]);
+  const rel = JSON.parse(await readFile(await dj.path(), "utf8"));
+  assert.equal(rel.fotos[1].comparacoes.continuidade.deSlot, "Frente");
+  assert.ok(rel.fotos[2].avisos.some((a) => a.camada === "continuidade" && a.codigo === "lacuna"));
+  assert.ok(rel.fotos[3].avisos.some((a) => a.codigo === "salto"));
+  assert.ok(rel.camadas.continuidade.avisou >= 2);
+  semEnvio(requests);
+});
