@@ -12,6 +12,26 @@ export const normalizarOrigem = (v) => {
 const lista = (v) => String(v || "").split(",").map((s) => s.trim()).filter(Boolean);
 const num = (v, padrao) => (Number.isFinite(Number(v)) && v !== "" && v != null ? Number(v) : padrao);
 
+/*
+ * Qual variável de token usar, PELO MODO (documentação, seção 1):
+ *   token   → token_usuario direto nas consultas: HINOVA_TOKEN_USUARIO, ou HINOVA_TOKEN (legado).
+ *             O token do painel (HINOVA_TOKEN_SGA) NÃO serve aqui: a Hinova responde 401.
+ *   usuario → token do painel só no /usuario/autenticar: HINOVA_TOKEN_SGA, ou HINOVA_TOKEN (legado).
+ * Antes era uma ordem fixa (USUARIO > SGA > TOKEN): com HINOVA_TOKEN_SGA preenchido no modo
+ * token, o token do painel ia para as consultas e tudo dava 401.
+ */
+const ORDEM_TOKEN = {
+  token: ["HINOVA_TOKEN_USUARIO", "HINOVA_TOKEN"],
+  usuario: ["HINOVA_TOKEN_SGA", "HINOVA_TOKEN"]
+};
+export function modoAuthDe(env) {
+  return env.HINOVA_AUTH || (env.HINOVA_TOKEN_USUARIO ? "token" : env.HINOVA_USUARIO && env.HINOVA_SENHA ? "usuario" : "token");
+}
+export function tokenHinova(env) {
+  const nome = (ORDEM_TOKEN[modoAuthDe(env)] || []).find((n) => credencial(env[n]));
+  return { variavel: nome || null, valor: nome ? credencial(env[nome]) : "" };
+}
+
 export function lerConfig(env = process.env) {
   return {
     producao: env.NODE_ENV === "production",
@@ -43,13 +63,14 @@ export function lerConfig(env = process.env) {
       baseUrl: (env.HINOVA_BASE_URL || "https://api.hinova.com.br/api/sga/v2").replace(/\/+$/, ""),
       // Documentação (docs/api/hinova-sga-api-v2.md, seções 0 e 1): HINOVA_TOKEN_SGA (token do painel,
       // só para /usuario/autenticar) ou HINOVA_TOKEN_USUARIO (token_usuario pronto). HINOVA_TOKEN = legado.
-      token: credencial(env.HINOVA_TOKEN_USUARIO || env.HINOVA_TOKEN_SGA || env.HINOVA_TOKEN),
+      token: tokenHinova(env).valor,
+      tokenVariavel: tokenHinova(env).variavel, // só o NOME da variável, para diagnóstico
       usuario: String(env.HINOVA_USUARIO || "").trim(),
       senha: env.HINOVA_SENHA || "",
       // token   → o token da associação vai direto no Authorization (como no n8n)
       // usuario → troca token + usuário/senha por um token_usuario (/usuario/autenticar)
       // Padrão: "usuario" se HINOVA_USUARIO e HINOVA_SENHA estiverem preenchidos; senão "token"
-      modoAuth: env.HINOVA_AUTH || (env.HINOVA_TOKEN_USUARIO ? "token" : env.HINOVA_USUARIO && env.HINOVA_SENHA ? "usuario" : "token"),
+      modoAuth: modoAuthDe(env),
       // CONFIRMAR na documentação/coleção Postman do SGA v2 do cliente.
       // Marcadores aceitos: {placa} {cpf} {codigo_veiculo} {codigo_associado} {nosso_numero}
       pathAutenticar: env.HINOVA_PATH_AUTENTICAR || "/usuario/autenticar",
@@ -123,7 +144,7 @@ export function conferirConfig(cfg) {
   if (!cfg.origens.length) faltando.push("ALLOWED_ORIGINS");
   if (!["simulado", "homologacao", "producao"].includes(cfg.modo)) faltando.push("MODO (simulado|homologacao|producao)");
   if (cfg.modo !== "simulado") {
-    if (!cfg.hinova.token) faltando.push("HINOVA_TOKEN");
+    if (!cfg.hinova.token) faltando.push(cfg.hinova.modoAuth === "usuario" ? "HINOVA_TOKEN_SGA" : "HINOVA_TOKEN_USUARIO (ou HINOVA_TOKEN)");
     if (!["token", "usuario"].includes(cfg.hinova.modoAuth)) faltando.push("HINOVA_AUTH (token|usuario)");
     if (cfg.hinova.modoAuth === "usuario" && !cfg.hinova.usuario) faltando.push("HINOVA_USUARIO");
     if (cfg.hinova.modoAuth === "usuario" && !cfg.hinova.senha) faltando.push("HINOVA_SENHA");

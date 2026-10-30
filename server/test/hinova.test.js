@@ -223,6 +223,22 @@ test("só rotas de boleto (HINOVA_PATH_VEICULO vazio): CPF e telefone vêm da li
   assert.equal((await h.consultar({ placa: "PGN3D63", cpf: "11144477735" })).resultado, "cpf_nao_confere");
 });
 
+test("credenciais: o token é escolhido pelo modo (token do painel nunca vai para as consultas)", async () => {
+  const { tokenHinova, conferirConfig } = await import("../lib/config.js");
+  // Migração: HINOVA_TOKEN (token do n8n) + HINOVA_TOKEN_SGA (painel) no modo token → usa o do n8n
+  const c1 = lerConfig({ HINOVA_AUTH: "token", HINOVA_TOKEN: "token-usuario-n8n", HINOVA_TOKEN_SGA: "token-do-painel" }).hinova;
+  assert.equal(c1.token, "token-usuario-n8n");
+  assert.equal(c1.tokenVariavel, "HINOVA_TOKEN");
+  assert.equal(tokenHinova({ HINOVA_TOKEN_USUARIO: "u", HINOVA_TOKEN: "t", HINOVA_TOKEN_SGA: "s" }).variavel, "HINOVA_TOKEN_USUARIO");
+  // Só o token do painel no modo token: nenhum token válido (conferirConfig acusa), nada de 401 silencioso
+  const c2 = lerConfig({ HINOVA_AUTH: "token", HINOVA_TOKEN_SGA: "token-do-painel" });
+  assert.equal(c2.hinova.token, "");
+  assert.ok(conferirConfig({ ...c2, modo: "producao" }).some((f) => f.includes("HINOVA_TOKEN_USUARIO")));
+  // Modo usuario: token do painel para /usuario/autenticar
+  const c3 = lerConfig({ HINOVA_TOKEN_SGA: "token-do-painel", HINOVA_TOKEN: "outro", HINOVA_USUARIO: "api", HINOVA_SENHA: "s" }).hinova;
+  assert.deepEqual([c3.modoAuth, c3.token, c3.tokenVariavel], ["usuario", "token-do-painel", "HINOVA_TOKEN_SGA"]);
+});
+
 test("credenciais: remove espaços nas pontas e \"Bearer \" colado no token", () => {
   const c = lerConfig({ HINOVA_TOKEN: "  Bearer abc123 \n", HINOVA_USUARIO: " api ", HINOVA_SENHA: "s" }).hinova;
   assert.equal(c.token, "abc123");

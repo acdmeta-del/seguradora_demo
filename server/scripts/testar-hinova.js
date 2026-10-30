@@ -23,7 +23,8 @@ if ((placaArg && !placa) || !cpf || args.length > 2) {
 }
 console.log(`Busca: ${placa ? `placa ${mascararPlaca(placa)} + CPF` : "só CPF (todos os veículos do titular)"} ${mascararCpf(cpf)}`);
 
-const cfg = lerConfig().hinova;
+const cfgCompleta = lerConfig();
+const cfg = cfgCompleta.hinova;
 const h = criarHinova(cfg);
 let falhas = 0;
 
@@ -66,7 +67,17 @@ function conferir(nome, bruto, usado) {
   if (/\s/.test(usado)) avisos.push("ATENÇÃO: tem espaço no meio");
   console.log(`  ${nome}: ${usado.length} caracteres${avisos.length ? " | " + avisos.join("; ") : ""}`);
 }
-conferir("HINOVA_TOKEN", process.env.HINOVA_TOKEN || "", cfg.token);
+// As três variáveis de token, e qual o modo atual usa (o token do painel só vale no modo usuario)
+for (const nome of ["HINOVA_TOKEN_USUARIO", "HINOVA_TOKEN_SGA", "HINOVA_TOKEN"]) {
+  const bruto = process.env[nome] || "";
+  if (!bruto) { console.log(`  ${nome}: vazio`); continue; }
+  const usado = bruto.trim().replace(/^Bearer\s+/i, "");
+  conferir(nome, bruto, usado);
+}
+console.log(`  Em uso: ${cfg.tokenVariavel || "NENHUM"}`);
+if (cfg.modoAuth === "token" && process.env.HINOVA_TOKEN_SGA) {
+  console.log("  ATENÇÃO: HINOVA_TOKEN_SGA está preenchido, mas no modo token ele é ignorado (o token do painel só serve para /usuario/autenticar, modo usuario).");
+}
 if (cfg.modoAuth === "usuario") {
   conferir("HINOVA_USUARIO", process.env.HINOVA_USUARIO || "", cfg.usuario);
   const senha = process.env.HINOVA_SENHA || "";
