@@ -446,7 +446,7 @@ test("mesmo veículo: foto tirada longe das outras gera aviso", async (t) => {
   assert.match(status, /tirada a uns 1\d{3} m das outras/);
 });
 
-test("tipos de veículo: moto e caminhão têm lista e silhueta próprias; trocar com fotos pede para apagar", async (t) => {
+test("tipos de veículo: só carro e moto; moto tem lista e silhueta próprias; trocar com fotos pede para apagar", async (t) => {
   const { page } = await abrir(t, { ajustes: SEM_DETECTOR });
   await page.check('input[name="tipo"][value="moto"]');
   await page.click("#v-comecar");
@@ -461,14 +461,15 @@ test("tipos de veículo: moto e caminhão têm lista e silhueta próprias; troca
   await page.click("#v-ver-revisao");
   assert.match(await page.locator("#v-revisao-resumo").innerText(), /1 de 9/);
   assert.match(await page.locator("#v-grade").innerText(), /Número do motor/);
-  // Trocar para caminhão: confirma (aceito no teste) e apaga as fotos da moto
+  // Não há mais vistoria de caminhão
   await page.reload();
-  await page.check('input[name="tipo"][value="caminhao"]');
+  assert.deepEqual(await page.locator('input[name="tipo"]').evaluateAll((l) => l.map((i) => i.value)), ["carro", "moto"]);
+  // Trocar para carro: confirma (aceito no teste) e apaga as fotos da moto
+  await page.check('input[name="tipo"][value="carro"]');
   await page.waitForFunction(() => document.querySelector("#v-retomada").hidden);
   await page.click("#v-comecar");
   await page.locator("#v-captura").waitFor({ state: "visible" });
-  assert.match(await page.locator("#v-progresso-texto").innerText(), /Foto 1 de 12 · 0 pronta/);
-  assert.match(await page.locator("#v-slot-instrucao").innerText(), /cabine/);
+  assert.match(await page.locator("#v-progresso-texto").innerText(), /Foto 1 de 11 · 0 pronta/);
 });
 
 test("continuidade: segue o veículo entre as fotos; avisa veículo perdido e salto; pausa no resultado não conta", async (t) => {

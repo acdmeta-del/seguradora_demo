@@ -74,7 +74,7 @@ compatibilidade da CSP com o diálogo e com `fetch`.
 - **Celular:** abra o endereço acima. A câmera e a localização exigem HTTPS, que o GitHub Pages já fornece.
 - **Computador:** `npx http-server -p 8080` (ou outro servidor estático) e `http://localhost:8080/vistoria-teste.html?dev=1`. `localhost` conta como endereço seguro. Por IP da rede (`http://192.168...`) a câmera **não** abre: use um túnel HTTPS ou o GitHub Pages.
 
-**Tipos de veículo:** carro (11 ângulos), moto (9: inclui número do motor) e caminhão (12: inclui carroceria/implemento e pneus/eixos), escolhidos na tela inicial. Cada tipo tem silhuetas, classes do detector e faixas de ângulo próprias (`tipos` em `js/vistoria-config.js`). Moto e caminhão ainda não foram calibrados: o ângulo só avisa.
+**Tipos de veículo:** carro (11 ângulos) e moto (9: inclui número do motor), escolhidos na tela inicial. Cada tipo tem silhuetas, classes do detector e faixas de ângulo próprias (`tipos` em `js/vistoria-config.js`). A moto ainda não foi calibrada: o ângulo só avisa.
 
 **Localização e horário obrigatórios:** sem uma posição do GPS com até 2 minutos (`geoIdadeMaxS`), o botão de foto fica desativado; com a permissão negada, a página explica como liberar no iPhone e no Android. Cada foto guarda latitude, longitude, precisão e a diferença entre o relógio do aparelho e a hora do GPS (relógio alterado aparece no relatório).
 
@@ -86,7 +86,7 @@ compatibilidade da CSP com o diálogo e com `fetch`.
 | `js/vistoria-qualidade.js` | Funções puras: resolução, nitidez (variância do Laplaciano), exposição, contraluz, dHash, duplicada, lado repetido |
 | `js/vistoria-posicao.js` | Nível do celular, detector COCO-SSD, enquadramento, estimativa de ângulo e o ponto de extensão `analisarFoto(imagem, slot)` |
 | `js/vistoria.js` | Interface: câmera, fluxo, revisão, painel dev, relatório JSON/ZIP, IndexedDB com expiração |
-| `js/vistoria-silhuetas.js` | Silhuetas em traço de cada ângulo: carro, moto e caminhão, painel, chassi, motor, porta-malas, carroceria, pneus |
+| `js/vistoria-silhuetas.js` | Silhuetas em traço de cada ângulo: carro e moto, painel, chassi, motor, porta-malas |
 | `js/vistoria-carimbo.js` | Carimbo do rodapé (data e hora de Brasília + logo) |
 | `css/vistoria.css` | Visual mobile first: câmera em tela cheia com o disparador dentro da imagem (coluna à direita com a tela deitada), botões grandes, contraste para uso no sol |
 | `js/vendor/tf-4.22.0.min.js`, `js/vendor/coco-ssd-2.2.3.min.js`, `assets/modelos/coco-ssd-lite/` | Detector **local** (~18 MB, baixado só no primeiro ângulo externo). Origem e SHA-256 no `LEIA-ME.md` do modelo |
@@ -98,7 +98,7 @@ compatibilidade da CSP com o diálogo e com `fetch`.
 | Qualidade | reprova | foto tremida ou fora de foco, muito escura ou clara, reflexo forte, resolução baixa, celular em pé nos ângulos externos | a nitidez muda com o aparelho e a textura do carro (carro liso e limpo mede menos): calibre com os sliders |
 | Contraluz | reprova | sol atrás do carro (centro bem mais escuro que as bordas) | carro escuro em fundo claro também cai aqui |
 | Legibilidade (odômetro, chassi) | reprova | centro desfocado | não lê os números (o OCR fica para depois, ver abaixo) |
-| Mesmo veículo | **só avisa** | carro de cor diferente (mesmo carro 0,71–0,99; cor diferente ≤ 0,6), moto x carro/caminhão, foto a mais de 150 m das outras, mais de 45 min depois da primeira | **não pega dois veículos parecidos no mesmo lugar** (2º teste: duas motos diferentes passaram). A cor não serve para moto nem caminhão (desligada); a aparência muda mais com o ângulo do que com o modelo. Identidade de verdade só conferindo placa/chassi/motor com o cadastro (Fase 2) |
+| Mesmo veículo | **só avisa** | carro de cor diferente (mesmo carro 0,71–0,99; cor diferente ≤ 0,6), moto x carro, foto a mais de 150 m das outras, mais de 45 min depois da primeira | **não pega dois veículos parecidos no mesmo lugar** (2º teste: duas motos diferentes passaram). A cor não serve para moto (desligada); a aparência muda mais com o ângulo do que com o modelo. Identidade de verdade só conferindo placa/chassi/motor com o cadastro (Fase 2) |
 | Continuidade | **só avisa** | entre uma foto e a próxima, o detector olha o vídeo 2 vezes por segundo e segue o veículo: avisa se ele saiu da câmera por mais de 6 s ou se a câmera "pulou" de repente para outro ponto com outra aparência (outro veículo?). Um veículo em outro ponto precisa se firmar por 3 olhadas (veículos ao fundo não contam) e girar o celular recomeça a trilha. O tempo olhando o resultado de uma tentativa não conta | quem anda com o celular abaixado gera aviso à toa; dois veículos encostados permitem passar de um para o outro sem salto. Gasta um pouco mais de bateria |
 | Duplicada (dHash) | **só avisa** | a mesma foto repetida | fundo igual com pouca diferença pode avisar à toa |
 | Lado repetido (espelho) | **só avisa** | a mesma lateral ou diagonal tirada duas vezes (compara com o par espelhado, usando o recorte do veículo quando há caixa) | depende do fundo e da iluminação dos dois lados |

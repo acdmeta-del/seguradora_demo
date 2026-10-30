@@ -1,7 +1,7 @@
 /*
  * Vistoria (TESTE, Fase 1): silhuetas em traço (SVG) sobre a câmera.
  * Todas no mesmo quadro 400 x 225 (16:9), na escala em que o carro deve aparecer:
- * frente/traseira ~65% da largura, diagonais ~72%, laterais ~80%.
+ * frente/traseira ~65% da largura, diagonais ~72%, laterais ~80% (carro e moto).
  * Peças simétricas são desenhadas só do lado esquerdo e espelhadas (ESPELHO).
  * PERSONALIZAR: os desenhos. O lado direito (espelhar no config) inverte a figura toda.
  */
@@ -212,81 +212,6 @@
     <path d="M204 109h64" stroke-dasharray="7 5"/>
     <path d="M120 162l-10 30M280 162l10 30"/>`;
 
-  /* ================= CAMINHÃO ================= */
-
-  const caminhaoLateral = `
-    <path d="M24 186v-74c0-12 6-18 16-20l12-22c2-6 8-10 16-10h36c6 0 10 4 10 10v116"/>
-    <path d="M58 72h44v34H46z"/>
-    <path d="M60 110v62"/>
-    <path d="M24 100l-8-4v20h8"/>
-    <rect x="18" y="170" width="12" height="16" rx="2"/>
-    <rect x="120" y="36" width="256" height="132" rx="4"/>
-    <path d="M184 36v132M248 36v132M312 36v132"/>
-    <path d="M110 172h266"/>
-    <rect x="128" y="168" width="44" height="14" rx="3"/>
-    <path d="M50 186a20 20 0 0 1 40 0"/>
-    <circle cx="70" cy="188" r="20"/><circle cx="70" cy="188" r="11"/>
-    <circle cx="296" cy="188" r="20"/><circle cx="296" cy="188" r="11"/>
-    <circle cx="344" cy="188" r="20"/><circle cx="344" cy="188" r="11"/>`;
-
-  const caminhaoFrente = `
-    <path d="M110 200V60c0-16 10-26 26-26h128c16 0 26 10 26 26v140"/>
-    <path d="M118 42h164"/>
-    <path d="M122 52h156l-6 52H128z"/><path d="M200 52v52"/>
-    <path d="M110 70H90M290 70h20"/><rect x="74" y="58" width="16" height="44" rx="3"/><rect x="310" y="58" width="16" height="44" rx="3"/>
-    <rect x="150" y="116" width="100" height="44" rx="4"/><path d="M156 126h88M156 136h88M156 146h88"/>
-    <rect x="118" y="128" width="26" height="16" rx="3"/><rect x="256" y="128" width="26" height="16" rx="3"/>
-    <rect x="104" y="168" width="192" height="22" rx="3"/>
-    <rect x="176" y="173" width="48" height="12" rx="2"/>
-    <rect x="118" y="190" width="28" height="26" rx="4"/><rect x="254" y="190" width="28" height="26" rx="4"/>`;
-
-  const caminhaoTraseira = `
-    <rect x="104" y="18" width="192" height="160" rx="4"/>
-    <path d="M200 18v160"/>
-    <path d="M150 30v136M250 30v136"/>
-    <path d="M184 90h10M206 90h10"/>
-    <rect x="112" y="160" width="30" height="10" rx="2"/><rect x="258" y="160" width="30" height="10" rx="2"/>
-    <rect x="176" y="164" width="48" height="12" rx="2"/>
-    <rect x="114" y="190" width="172" height="8" rx="2"/><path d="M128 178v12M272 178v12"/>
-    <rect x="110" y="180" width="44" height="34" rx="5"/><rect x="246" y="180" width="44" height="34" rx="5"/>`;
-
-  const caminhaoDiagFrontal = `
-    <path d="M36 196v-90c0-10 6-18 16-20l14-26c3-6 9-10 16-10h40l10 4v142"/>
-    <path d="M46 92l20-24h44l4 30z"/>
-    <path d="M118 70l14-4 0 34-14 2"/>
-    <rect x="40" y="128" width="34" height="18" rx="2"/><path d="M44 134h26M44 140h26"/>
-    <rect x="38" y="112" width="14" height="10" rx="2"/>
-    <rect x="34" y="166" width="48" height="16" rx="2"/>
-    <path d="M132 34l238 18v114l-238 8z"/>
-    <path d="M190 39v130M250 44v123M310 48v120"/>
-    <path d="M122 176l248-6"/>
-    <ellipse cx="62" cy="194" rx="14" ry="22"/><ellipse cx="62" cy="194" rx="8" ry="13"/>
-    <ellipse cx="160" cy="190" rx="18" ry="22"/><ellipse cx="160" cy="190" rx="10" ry="12"/>
-    <ellipse cx="300" cy="182" rx="15" ry="18"/><ellipse cx="336" cy="180" rx="14" ry="17"/>`;
-
-  const caminhaoDiagTraseira = `
-    <path d="M364 196V28H262l-4 2v168"/>
-    <path d="M312 28v168"/>
-    <rect x="266" y="176" width="20" height="8" rx="2"/><rect x="340" y="176" width="20" height="8" rx="2"/>
-    <rect x="290" y="184" width="40" height="10" rx="2"/>
-    <path d="M258 30L60 50v118l198 30"/>
-    <path d="M200 36v148M140 43v133M90 47v123"/>
-    <path d="M60 50l-6 2-18 24c-4 6-6 12-6 18v74h30"/>
-    <ellipse cx="286" cy="200" rx="18" ry="20"/><ellipse cx="236" cy="196" rx="17" ry="19"/>
-    <ellipse cx="80" cy="182" rx="13" ry="16"/><ellipse cx="80" cy="182" rx="7" ry="9"/>`;
-
-  const pneu = `
-    <circle cx="200" cy="112" r="92"/><circle cx="200" cy="112" r="60"/><circle cx="200" cy="112" r="20"/>
-    <circle cx="200" cy="80" r="4"/><circle cx="232" cy="112" r="4"/><circle cx="200" cy="144" r="4"/><circle cx="168" cy="112" r="4"/>
-    <path d="M200 20v14M265 47l-10 10M292 112h-14M265 177l-10-10M200 204v-14M135 177l10-10M108 112h14M135 47l10 10"/>`;
-
-  const carroceria = `
-    <path d="M60 196V70l60-34h220v126l-60 34z"/>
-    <path d="M120 36v126h220M120 162l-60 34"/>
-    <path d="M60 100l60-34M60 130l60-34M60 160l60-34"/>
-    <path d="M150 36v126M190 36v126M230 36v126M270 36v126M310 36v126"/>
-    <path d="M60 196h220"/>`;
-
   raiz.VistoriaSilhuetas = {
     frente, traseira, lateral,
     "diagonal-frontal": diagonalFrontal,
@@ -298,12 +223,6 @@
     "moto-diagonal-frontal": motoLado({ rf: 26, rt: 22, ry: 34 }),
     "moto-diagonal-traseira": motoLado({ rf: 20, rt: 28, ry: 34 }),
     "moto-painel": motoPainel,
-    motor,
-    "caminhao-frente": caminhaoFrente,
-    "caminhao-traseira": caminhaoTraseira,
-    "caminhao-lateral": caminhaoLateral,
-    "caminhao-diagonal-frontal": caminhaoDiagFrontal,
-    "caminhao-diagonal-traseira": caminhaoDiagTraseira,
-    pneu, carroceria
+    motor
   };
 })(typeof self !== "undefined" ? self : this);

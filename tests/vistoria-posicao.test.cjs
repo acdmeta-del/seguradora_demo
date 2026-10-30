@@ -92,8 +92,8 @@ test("ângulo: faixas do 1º teste real; bloqueia só com confiança alta", () =
   assert.deepEqual(P.avaliarAngulo(meio, slot("frente")), { erros: [], avisos: [] });
   // Moto detectada num carro: as faixas não valem, confiança baixa; ângulo interno: sem estimativa
   assert.equal(est(caixa(1.1, { classe: "motorcycle" }), slot("lateral-esquerda")).confianca, "baixa");
-  // Tipos ainda sem calibrar (moto, caminhão): nunca bloqueiam
-  for (const t of ["moto", "caminhao"]) {
+  // Tipo ainda sem calibrar (moto): nunca bloqueia
+  for (const t of ["moto"]) {
     const s0 = CFG.tipos[t].slots.find((s) => s.anguloEsperado === "lateral");
     const e = P.estimarAngulo(caixa(0.5, { classe: CFG.tipos[t].classes[0] }), s0, CFG.tipos[t].faixasAngulo, CFG.tipos[t]);
     assert.equal(e.confianca, "baixa", t);
@@ -113,9 +113,6 @@ test("enquadramento por tipo: moto de frente usa o maior lado; outro tipo de ve�
   const r = P.avaliarEnquadramento(det(0.15, 0.2, 0.7, 0.6), CFG.tipos.moto.slots[2], L, moto);
   assert.equal(r.avisos[0].codigo, "outro_tipo");
   assert.match(r.avisos[0].texto, /um carro, mas esta vistoria é de moto/);
-  // Caminhão: lateral aceita até 96% da largura
-  const cam = CFG.tipos.caminhao;
-  assert.deepEqual(P.avaliarEnquadramento(det(0.025, 0.2, 0.95, 0.5, { classe: "truck" }), cam.slots[2], L, cam).erros, []);
 });
 
 test("continuidade: trilha contínua não avisa; veículo perdido, salto e pausa se comportam", () => {

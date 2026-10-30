@@ -205,8 +205,8 @@
   /* ---------- 3. Estimativa de ângulo (heurística) ----------
    * Só olha a proporção largura/altura da caixa do veículo, em pixels, com as faixas de cada
    * tipo (vistoria-config.js). Carro calibrado no 1º teste real (hatch, iPhone, ~3 passos):
-   * frente 1,31, traseira 1,37, diagonais 1,46–1,58, laterais 2,36–2,45. Moto e caminhão:
-   * estimativa inicial, sempre confiança baixa até calibrar (o relatório traz a proporção).
+   * frente 1,31, traseira 1,37, diagonais 1,46–1,58, laterais 2,36–2,45. Moto:
+   * faixas de 2 testes, sempre confiança baixa até calibrar (o relatório traz a proporção).
    * O que NÃO dá para saber assim: frente x traseira, esquerda x direita.
    */
   // faixas: VISTORIA_CONFIG.tipos[tipo].faixasAngulo = [{ ate, grupo, alta: [de, ate], media: [de, ate] }]

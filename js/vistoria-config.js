@@ -120,7 +120,7 @@ window.VISTORIA_CONFIG = {
    * Tipos de veículo. Cada um tem a lista de ângulos, os pares espelhados, as classes do
    * detector que espera e as faixas da heurística de ângulo (proporção largura/altura da caixa).
    *   faixasAngulo: [{ ate, grupo, alta: [de, ate], media: [de, ate] }]. Fora de alta/media = baixa.
-   *   Moto e caminhão ainda NÃO calibrados (sem alta/media): o ângulo só avisa, nunca bloqueia.
+   *   Moto ainda NÃO calibrada (sem alta/media): o ângulo só avisa, nunca bloqueia.
    * Campos dos ângulos:
    *   silhueta: nome em js/vistoria-silhuetas.js · espelhar: inverte a silhueta (lado direito)
    *   externo: aplica detecção do veículo e enquadramento
@@ -210,49 +210,7 @@ window.VISTORIA_CONFIG = {
         { id: "moto-motor", nome: "Número do motor", silhueta: "motor", orientacao: "qualquer", externo: false, legibilidade: true,
           instrucao: "Aproxime da gravação do número do motor, no bloco. Os caracteres devem ficar nítidos.", codigoTipoSgaPendente: null }
       ]
-    },
-
-    caminhao: {
-      nome: "Caminhão", artigo: "o caminhão",
-      classes: ["truck", "bus"],
-      compararCor: false, // cabine e baú costumam ter cores diferentes: daria alarme falso
-      faixasAngulo: [ // estimativa inicial, sem calibrar (muda muito com cavalo, baú e carreta)
-        { ate: 1.25, grupo: "frente-traseira" },
-        { ate: 2.0, grupo: "diagonal" },
-        { ate: 2.3, grupo: "indefinido" },
-        { ate: 99, grupo: "lateral" }
-      ],
-      espelhos: [
-        ["caminhao-lateral-esquerda", "caminhao-lateral-direita"],
-        ["caminhao-diagonal-frontal-esquerda", "caminhao-diagonal-frontal-direita"],
-        ["caminhao-diagonal-traseira-esquerda", "caminhao-diagonal-traseira-direita"]
-      ],
-      slots: [
-        { id: "caminhao-frente", nome: "Frente", silhueta: "caminhao-frente", orientacao: "paisagem", externo: true, anguloEsperado: "frente-traseira", largura: [0.4, 0.9],
-          instrucao: "De frente para a cabine, a uns 5 passos. Pegue a cabine inteira, do teto ao para-choque, e a placa.", codigoTipoSgaPendente: null },
-        { id: "caminhao-traseira", nome: "Traseira", silhueta: "caminhao-traseira", orientacao: "paisagem", externo: true, anguloEsperado: "frente-traseira", largura: [0.4, 0.9],
-          instrucao: "Atrás do caminhão, a uns 5 passos. Pegue a traseira inteira, as lanternas e a placa.", codigoTipoSgaPendente: null },
-        { id: "caminhao-lateral-esquerda", nome: "Lateral esquerda", silhueta: "caminhao-lateral", orientacao: "paisagem", externo: true, anguloEsperado: "lateral", largura: [0.6, 0.96],
-          instrucao: "Lado do motorista. Afaste-se até caber o caminhão inteiro, da cabine à traseira.", codigoTipoSgaPendente: null },
-        { id: "caminhao-lateral-direita", nome: "Lateral direita", silhueta: "caminhao-lateral", espelhar: true, orientacao: "paisagem", externo: true, anguloEsperado: "lateral", largura: [0.6, 0.96],
-          instrucao: "Lado do passageiro. Afaste-se até caber o caminhão inteiro, da cabine à traseira.", codigoTipoSgaPendente: null },
-        { id: "caminhao-diagonal-frontal-esquerda", nome: "Diagonal frontal esquerda", silhueta: "caminhao-diagonal-frontal", orientacao: "paisagem", externo: true, anguloEsperado: "diagonal", largura: [0.5, 0.94],
-          instrucao: "Na quina da cabine, do lado do motorista. Pegue a frente e a lateral juntas.", codigoTipoSgaPendente: null },
-        { id: "caminhao-diagonal-frontal-direita", nome: "Diagonal frontal direita", silhueta: "caminhao-diagonal-frontal", espelhar: true, orientacao: "paisagem", externo: true, anguloEsperado: "diagonal", largura: [0.5, 0.94],
-          instrucao: "Na quina da cabine, do lado do passageiro. Pegue a frente e a lateral juntas.", codigoTipoSgaPendente: null },
-        { id: "caminhao-diagonal-traseira-esquerda", nome: "Diagonal traseira esquerda", silhueta: "caminhao-diagonal-traseira", orientacao: "paisagem", externo: true, anguloEsperado: "diagonal", largura: [0.5, 0.94],
-          instrucao: "Na quina de trás, do lado do motorista. Pegue a traseira e a lateral juntas.", codigoTipoSgaPendente: null },
-        { id: "caminhao-diagonal-traseira-direita", nome: "Diagonal traseira direita", silhueta: "caminhao-diagonal-traseira", espelhar: true, orientacao: "paisagem", externo: true, anguloEsperado: "diagonal", largura: [0.5, 0.94],
-          instrucao: "Na quina de trás, do lado do passageiro. Pegue a traseira e a lateral juntas.", codigoTipoSgaPendente: null },
-        { id: "caminhao-painel", nome: "Painel com odômetro", silhueta: "painel", orientacao: "qualquer", externo: false, legibilidade: true,
-          instrucao: "Com o motor ligado, enquadre o painel. A quilometragem deve ficar no centro e legível.", codigoTipoSgaPendente: null },
-        { id: "caminhao-chassi", nome: "Chassi", silhueta: "chassi", orientacao: "qualquer", externo: false, legibilidade: true,
-          instrucao: "Aproxime da gravação do chassi (longarina) ou da plaqueta. Os caracteres devem ficar nítidos.", codigoTipoSgaPendente: null },
-        { id: "caminhao-carroceria", nome: "Carroceria ou implemento", silhueta: "carroceria", orientacao: "paisagem", externo: false,
-          instrucao: "Mostre a carroceria ou o implemento (baú, grade, tanque, basculante) e o estado da lona ou das portas.", codigoTipoSgaPendente: null },
-        { id: "caminhao-pneus", nome: "Pneus e eixos", silhueta: "pneu", orientacao: "qualquer", externo: false,
-          instrucao: "Aproxime dos pneus de um eixo traseiro: a banda de rodagem deve aparecer nítida.", codigoTipoSgaPendente: null }
-      ]
     }
+
   }
 };

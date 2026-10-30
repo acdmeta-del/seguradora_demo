@@ -138,7 +138,7 @@
     parecida: (nome) => `Muito parecida com “${nome}”. Confira se você mudou de ângulo.`,
     espelho: (nome) => `Parece o mesmo lado de “${nome}”. Confira se fotografou o outro lado do veículo.`,
     outraCor: () => "A cor do veículo nesta foto não bate com as outras: confira se é o mesmo veículo.",
-    outraClasse: () => "Esta foto parece de outro tipo de veículo (moto x carro ou caminhão) que as anteriores.",
+    outraClasse: () => "Esta foto parece de outro tipo de veículo (moto x carro) que as anteriores.",
     longe: (m) => `Esta foto foi tirada a uns ${m} m das outras: confira se é o mesmo veículo e o mesmo local.`,
     demorou: (min) => `Esta foto foi tirada ${min} min depois da primeira: confira se é o mesmo veículo.`
   };

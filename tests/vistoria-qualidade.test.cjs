@@ -117,7 +117,7 @@ test("configuração: três tipos, ids únicos, silhueta existente e codigoTipoS
   global.self = {};
   require("../js/vistoria-silhuetas.js");
   const SIL = global.self.VistoriaSilhuetas;
-  assert.deepEqual(Object.keys(CFG.tipos), ["carro", "moto", "caminhao"]);
+  assert.deepEqual(Object.keys(CFG.tipos), ["carro", "moto"]);
   assert.equal(CARRO.slots.length, 11);
   const ids = Object.values(CFG.tipos).flatMap((t) => t.slots.map((s) => s.id));
   assert.equal(new Set(ids).size, ids.length, "ids únicos entre os tipos (IndexedDB)");
@@ -131,8 +131,8 @@ test("configuração: três tipos, ids únicos, silhueta existente e codigoTipoS
     assert.ok(t.classes.length && t.faixasAngulo.length, nome);
   }
   for (const [chave] of CFG.ajustes) assert.ok(chave in L, chave);
-  // Cor só no carro: em moto (caixa quase toda fundo) e caminhão (cabine x baú) daria erro
-  assert.deepEqual(Object.values(CFG.tipos).map((t) => t.compararCor), [true, false, false]);
+  // Cor só no carro: em moto (caixa quase toda fundo) daria erro
+  assert.deepEqual(Object.values(CFG.tipos).map((t) => t.compararCor), [true, false]);
   assert.equal(CFG.carimbo.logo, "assets/logo-claro.svg");
 });
 

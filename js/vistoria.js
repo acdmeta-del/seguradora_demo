@@ -33,7 +33,7 @@
   }
   const salvarAjustes = () => { try { localStorage.setItem("vistoria-ajustes", JSON.stringify({ limites: L, camadas })); } catch { /* ignora */ } };
 
-  // Tipo de veículo (carro, moto, caminhão): define ângulos, silhuetas e classes esperadas
+  // Tipo de veículo (carro ou moto): define ângulos, silhuetas e classes esperadas
   let tipoId = CFG.tipoPadrao, tipo = CFG.tipos[tipoId], slots = tipo.slots;
   function definirTipo(id) {
     if (!CFG.tipos[id]) return;
@@ -547,7 +547,7 @@
       juntar(r);
     }
     if (camadas.mesmoVeiculo) {
-      // Cor só onde funciona (tipo.compararCor): carro sim; moto e caminhão não
+      // Cor só onde funciona (tipo.compararCor): carro sim; moto não
       const resumo = (f) => ({ cor: tipo.compararCor && f.medidas ? f.medidas.cor : null, classe: f.deteccao && f.deteccao.encontrado ? f.deteccao.classe : null, geo: f.geo, em: Date.parse(f.capturadaEm) });
       const outras = [...estado.fotos.values()].filter((f) => f.slotId !== foto.slotId && ACEITAS.has(f.status)).map(resumo);
       const r = Q.avaliarMesmoVeiculo(resumo(foto), outras, L);
