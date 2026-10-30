@@ -545,3 +545,102 @@ test("continuidade: segue o veículo entre as fotos; avisa veículo perdido e sa
   assert.ok(rel.camadas.continuidade.avisou >= 2);
   semEnvio(requests);
 });
+
+test("avarias: marca o ponto na foto, escolhe tipo e região, tira a foto de perto; relatório, ZIP e recarga", async (t) => {
+  const { page, requests } = await abrir(t, { ajustes: SEM_DETECTOR });
+  await page.click("#v-comecar");
+  await enviar(page, cena(21));
+  await esperarResultado(page);
+  await page.click("#v-aceitar");
+  await page.locator("#v-captura").waitFor({ state: "visible" });
+  await page.click("#v-ver-revisao");
+  assert.match(await page.locator("#v-revisao-avarias-status").innerText(), /Ainda não respondido/);
+  await page.click("#v-ir-avarias");
+  await page.click("#v-avaria-nova");
+  await page.locator("#v-avaria").waitFor({ state: "visible" });
+
+  // Sem preencher nada: diz o que falta
+  await page.click("#v-avaria-salvar");
+  assert.match(await page.locator("#v-avaria-erro").innerText(), /em qual foto.*tipo.*região.*foto de perto/);
+
+  // 1 e 2. Foto da frente e toque no ponto (25% da largura, 40% da altura da imagem com a faixa do carimbo)
+  await page.click('[data-ref="frente"]');
+  await page.locator("#v-avaria-marcar").waitFor({ state: "visible" });
+  const img = page.locator("#v-avaria-ref-img");
+  await page.waitForFunction(() => document.querySelector("#v-avaria-ref-img").naturalHeight > 0);
+  const caixa = await img.boundingBox();
+  await img.click({ position: { x: caixa.width * 0.25, y: caixa.height * 0.4 } });
+  assert.equal(await page.locator("#v-avaria-ponto").isVisible(), true);
+  // 3 e 4. Tipo e região
+  await page.check('input[name="avaria-tipo"][value="Amassado"]');
+  await page.selectOption("#v-avaria-regiao", "Capô");
+  await page.fill("#v-avaria-obs", "Amassado pequeno perto do emblema");
+  // 5. Foto de perto: mesma câmera, alvo no centro, validações de qualidade
+  await page.click("#v-avaria-close");
+  await page.locator("#v-captura").waitFor({ state: "visible" });
+  assert.equal(await page.locator("#v-slot-nome").innerText(), "Foto de perto da avaria");
+  assert.match(await page.locator("#v-progresso-texto").innerText(), /Avaria 1 · Amassado · Capô/);
+  assert.ok((await page.locator("#v-silhueta").innerHTML()).includes('r="62"'), "alvo no centro");
+  await enviar(page, cena(22));
+  assert.match(await esperarResultado(page), /Aprovada/);
+  await page.click("#v-aceitar");
+  await page.locator("#v-avaria").waitFor({ state: "visible" });
+  assert.equal(await page.locator("#v-avaria-close-img").isVisible(), true);
+  assert.equal(await page.locator('input[name="avaria-tipo"][value="Amassado"]').isChecked(), true, "o formulário mantém o que foi preenchido");
+  await page.click("#v-avaria-salvar");
+  await page.locator("#v-avarias").waitFor({ state: "visible" });
+  assert.match(await page.locator("#v-avarias-lista").innerText(), /1\. Amassado · Capô[\s\S]*Marcada na foto “Frente”/);
+  assert.equal(await page.locator("#v-sem-avarias").isHidden(), true);
+
+  // Relatório e ZIP
+  await page.click("#v-avarias-concluir");
+  await page.locator("#v-revisao").waitFor({ state: "visible" });
+  assert.match(await page.locator("#v-revisao-avarias-status").innerText(), /1 avaria/);
+  const [dj] = await Promise.all([page.waitForEvent("download"), page.click("#v-relatorio")]);
+  const rel = JSON.parse(await readFile(await dj.path(), "utf8"));
+  assert.equal(rel.avarias.declaracao, "com-avarias");
+  const a = rel.avarias.itens[0];
+  assert.deepEqual([a.numero, a.tipo, a.regiao, a.fotoReferencia.slot, a.observacao], [1, "Amassado", "Capô", "frente", "Amassado pequeno perto do emblema"]);
+  // y na área da FOTO: 0,4 da imagem com faixa → 0,4 × 778/720 ≈ 0,432
+  assert.ok(Math.abs(a.ponto.x - 0.25) < 0.02 && Math.abs(a.ponto.y - 0.432) < 0.02, JSON.stringify(a.ponto));
+  assert.equal(a.close.status, "aprovada");
+  assert.match(a.close.carimbo, /Horário de Brasília/);
+  assert.equal(a.close.geo.lat, -15.7939);
+  assert.ok(!JSON.stringify(rel).includes("data:image"));
+  const [dz] = await Promise.all([page.waitForEvent("download"), page.click("#v-zip")]);
+  const z = await readFile(await dz.path());
+  for (const nome of ["avarias/01-perto.jpg", "avarias/01-marcacao.jpg"]) assert.ok(z.includes(nome), nome);
+
+  // Recarregar: a avaria continua no aparelho
+  await page.reload();
+  await page.click("#v-ir-revisao");
+  assert.match(await page.locator("#v-revisao-avarias-status").innerText(), /1 avaria/);
+  // Remover (confirmação aceita no teste) e declarar que não há avarias
+  await page.click("#v-ir-avarias");
+  await page.click("[data-remover-avaria]");
+  await page.waitForFunction(() => !document.querySelector("#v-avarias-lista").children.length);
+  await page.click("#v-sem-avarias");
+  await page.locator("#v-revisao").waitFor({ state: "visible" });
+  assert.match(await page.locator("#v-revisao-avarias-status").innerText(), /Declarado: o veículo não tem avarias/);
+  semEnvio(requests);
+});
+
+test("avarias: depois do último ângulo, a vistoria vai para o passo das avarias", async (t) => {
+  const { page } = await abrir(t, { ajustes: SEM_DETECTOR });
+  await page.check('input[name="tipo"][value="moto"]');
+  await page.click("#v-comecar");
+  for (let i = 0; i < 9; i++) {
+    await enviar(page, cena(30 + i));
+    await esperarResultado(page);
+    if (await page.locator("#v-aceitar").isEnabled()) await page.click("#v-aceitar"); else await page.click("#v-forcar");
+    if (i < 8) await page.locator("#v-captura").waitFor({ state: "visible" });
+  }
+  await page.locator("#v-avarias").waitFor({ state: "visible" });
+  await page.click("#v-avaria-nova");
+  // Região com a lista da moto
+  assert.ok((await page.locator("#v-avaria-regiao").innerText()).includes("Tanque"));
+  await page.click("#v-avaria-cancelar");
+  await page.click("#v-sem-avarias");
+  await page.locator("#v-revisao").waitFor({ state: "visible" });
+  assert.match(await page.locator("#v-revisao-resumo").innerText(), /9 de 9/);
+});

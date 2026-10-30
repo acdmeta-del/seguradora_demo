@@ -132,12 +132,28 @@ window.VISTORIA_CONFIG = {
    * OCR (possibilidade futura, não implementado): ler odômetro, chassi e placa no próprio
    * aparelho, só como conferência, nunca como critério de aprovação.
    */
+  // Avarias (marcação manual): ponto numa foto + tipo + região + foto de perto
+  avarias: {
+    maximo: 20,
+    tipos: ["Risco", "Amassado", "Trinca ou quebrado", "Ferrugem", "Peça faltando", "Outro"],
+    // A foto de perto passa pelas mesmas validações de qualidade (nitidez no centro, luz, resolução),
+    // pelo GPS obrigatório e pelo carimbo; não passa por detecção, ângulo nem continuidade
+    close: { id: "avaria-close", nome: "Foto de perto da avaria", silhueta: "alvo", orientacao: "qualquer", externo: false, legibilidade: true,
+      instrucao: "Aproxime a uns 30 cm e deixe a avaria no centro do círculo, nítida e com boa luz.", codigoTipoSgaPendente: null }
+  },
+
   tipoPadrao: "carro",
   tipos: {
     carro: {
       nome: "Carro", artigo: "o carro",
       classes: ["car", "truck"], // picape e SUV às vezes saem como "truck"
       compararCor: true,         // cor da lataria entre as fotos (calibrado no 1º teste)
+      regioesAvaria: [
+        "Para-choque dianteiro", "Capô", "Grade e faróis", "Para-brisa", "Teto",
+        "Para-lama dianteiro esquerdo", "Porta dianteira esquerda", "Porta traseira esquerda", "Lateral traseira esquerda", "Retrovisor esquerdo",
+        "Para-lama dianteiro direito", "Porta dianteira direita", "Porta traseira direita", "Lateral traseira direita", "Retrovisor direito",
+        "Tampa traseira ou porta-malas", "Vidro traseiro", "Lanternas", "Para-choque traseiro", "Rodas e pneus", "Vidros laterais", "Interior", "Outra"
+      ],
       faixasAngulo: [
         { ate: 1.42, grupo: "frente-traseira", alta: [0, 1.3], media: [1.3, 1.39] },
         { ate: 1.85, grupo: "diagonal", media: [1.45, 1.75] },
@@ -181,6 +197,11 @@ window.VISTORIA_CONFIG = {
       // Cor NÃO serve para moto: a caixa é quase toda fundo, pneus e peças pretas
       // (2º teste: duas motos diferentes ficaram 0,73–0,82 parecidas)
       compararCor: false,
+      regioesAvaria: [
+        "Farol e carenagem frontal", "Para-brisa ou bolha", "Para-lama dianteiro", "Guidão e manetes", "Retrovisores", "Painel",
+        "Tanque", "Carenagem lateral esquerda", "Carenagem lateral direita", "Banco", "Escapamento", "Motor",
+        "Roda e pneu dianteiro", "Roda e pneu traseiro", "Lanterna e para-lama traseiro", "Pedaleiras e descanso", "Outra"
+      ],
       // Proporções medidas em 2 testes (3 motos): frente/traseira 0,41–0,53; diagonais 0,73 e 1,11;
       // laterais 1,24–1,59. Ainda poucas medidas: confiança sempre baixa (só avisa)
       faixasAngulo: [

@@ -78,6 +78,15 @@ compatibilidade da CSP com o diálogo e com `fetch`.
 
 **Localização e horário obrigatórios:** sem uma posição do GPS com até 2 minutos (`geoIdadeMaxS`), o botão de foto fica desativado; com a permissão negada, a página explica como liberar no iPhone e no Android. Cada foto guarda latitude, longitude, precisão e a diferença entre o relógio do aparelho e a hora do GPS (relógio alterado aparece no relatório).
 
+**Avarias (marcação manual):** depois do último ângulo (ou pela revisão), a pessoa declara que o veículo não tem avarias ou registra cada uma:
+1. a foto em que ela aparece, com um toque no ponto exato (ou "não aparece nas fotos");
+2. o tipo (risco, amassado, trinca ou quebrado, ferrugem, peça faltando, outro);
+3. a região, com lista própria para carro e moto;
+4. uma observação opcional;
+5. uma foto de perto, na mesma câmera, com alvo no centro, validações de nitidez e luz, GPS obrigatório e carimbo.
+
+O relatório traz a declaração e cada avaria (ponto em coordenadas de 0 a 1 da foto, sem a faixa do carimbo). O ZIP leva `avarias/NN-perto.jpg` e `avarias/NN-marcacao.jpg` (a foto de referência com o ponto circulado). Detecção automática de avarias fica para depois, plugada em `analisarFoto(imagem, slot)`.
+
 **Carimbo:** a foto guardada ganha uma faixa embaixo com data e hora de Brasília (`DD-MM-AAAA HH:MM:SS`) e o logo da Integra em versão clara (`assets/logo-claro.svg`, **provisório** como o `assets/logo.svg`: trocar pelo oficial). A faixa fica abaixo da imagem, sem cobrir o veículo, e as medições usam a foto sem carimbo. A hora vem do relógio do aparelho: na Fase 2, conferir com a hora do servidor.
 
 | Arquivo | Papel |
@@ -120,7 +129,7 @@ O modo `?dev=1` mostra as métricas medidas e os limites de cada foto e a caixa 
 
 **Possibilidades futuras (não implementadas):**
 - OCR local do odômetro, do chassi e da placa com Tesseract.js, só como conferência (a placa lida na frente e na traseira resolveria "dois veículos da mesma cor"). É pesado (cerca de 10 MB) e lê mal odômetro digital.
-- Avarias: marcação manual (o associado toca no ponto da avaria na foto e tira um close) e, depois, um modelo de visão treinado para avarias (riscos, amassados, vidro trincado, farol quebrado), plugado em `analisarFoto(imagem, slot)`.
+- Avarias automáticas: um modelo de visão treinado para avarias (riscos, amassados, vidro trincado, farol quebrado), plugado em `analisarFoto(imagem, slot)`, como sinal para o analista. As fotos de perto da marcação manual servem para testá-lo.
 
 **Fase 2 (não feita):**
 - cadastro do candidato e do veículo;

@@ -54,14 +54,22 @@
     geoErro: null,
     trilha: null,         // continuidade: { inicio, deNome, amostras, ultimo, pausas, pausaDesde }
     capturando: false,
+    especial: null,       // passo fora da lista de ângulos (foto de perto de avaria)
+    avarias: new Map(),   // id → avaria salva
+    rascunho: null,       // avaria em edição
+    declaracaoAvarias: null, // null (não respondeu) | "sem" | "com"
     stream: null
   };
+  const CLOSE = CFG.avarias.close;
+  // Passo atual: o ângulo da lista ou o passo especial (foto de perto de avaria)
+  const slotAtual = () => estado.especial || slots[estado.indice];
+  const slotDe = (id) => (id === CLOSE.id ? CLOSE : slots.find((s) => s.id === id));
   const incl = P.criarInclinacao();
   const detector = P.criarDetector(CFG.deteccao);
 
   const el = {
     aviso: $("#v-aviso"),
-    telas: { inicio: $("#v-inicio"), captura: $("#v-captura"), resultado: $("#v-resultado"), revisao: $("#v-revisao") },
+    telas: { inicio: $("#v-inicio"), captura: $("#v-captura"), resultado: $("#v-resultado"), revisao: $("#v-revisao"), avarias: $("#v-avarias"), avaria: $("#v-avaria") },
     video: $("#v-video"), guia: $("#v-guia"), silhueta: $("#v-silhueta"), camErro: $("#v-camera-erro"),
     nivel: $("#v-nivel"), nivelLinha: $("#v-nivel-linha"), nivelTexto: $("#v-nivel-texto"),
     geoStatus: $("#v-geo-status"), geoErro: $("#v-geo-erro"), trilhaStatus: $("#v-trilha-status"),
@@ -79,7 +87,8 @@
     for (const [k, t] of Object.entries(el.telas)) t.hidden = k !== nome;
     document.body.classList.toggle("v-modo-camera", nome === "captura");
     if (nome !== "captura" && nome !== "resultado") pararCamera();
-    window.scrollTo(0, 0);
+    // Troca de tela vai direto ao topo (o site usa rolagem suave, que aqui só atrasa)
+    window.scrollTo({ top: 0, left: 0, behavior: "instant" });
   }
 
   /* ---------- Armazenamento local (IndexedDB) com expiração ----------
@@ -114,7 +123,8 @@
       salvarFoto: (f) => pedir("fotos", "readwrite", (s) => s.put(paraGuardar(f))),
       apagarFoto: (id) => pedir("fotos", "readwrite", (s) => s.delete(id)),
       fotos: () => pedir("fotos", "readonly", (s) => s.getAll()),
-      salvarMeta: () => pedir("meta", "readwrite", (s) => s.put({ salvaEm: Date.now(), tipo: tipoId, tentativas: estado.tentativas, historico: estado.historico, inicioSlot: estado.inicioSlot }, "estado")),
+      salvarMeta: () => pedir("meta", "readwrite", (s) => s.put({ salvaEm: Date.now(), tipo: tipoId, tentativas: estado.tentativas, historico: estado.historico, inicioSlot: estado.inicioSlot, declaracaoAvarias: estado.declaracaoAvarias }, "estado")),
+      salvarAvaria: (a) => pedir("fotos", "readwrite", (s) => s.put({ ...a, slotId: `avaria:${a.id}`, registro: "avaria", close: a.close ? paraGuardar(a.close) : null })),
       meta: () => pedir("meta", "readonly", (s) => s.get("estado")),
       limpar: () => Promise.all([pedir("fotos", "readwrite", (s) => s.clear()), pedir("meta", "readwrite", (s) => s.clear())])
     };
@@ -131,15 +141,21 @@
       estado.tentativas = meta.tentativas || {};
       estado.historico = meta.historico || [];
       estado.inicioSlot = meta.inicioSlot || {};
+      estado.declaracaoAvarias = meta.declaracaoAvarias || null;
     }
     let maisAntiga = null;
     for (const f of (await banco.fotos()) || []) {
       if (agora - f.salvaEm >= EXPIRA_MS) { await banco.apagarFoto(f.slotId); continue; }
+      if (f.registro === "avaria") {
+        const { slotId, registro, ...a } = f;
+        estado.avarias.set(a.id, { ...a, close: a.close ? { ...a.close, url: a.close.blob ? URL.createObjectURL(a.close.blob) : null } : null });
+        continue;
+      }
       if (!slots.some((s) => s.id === f.slotId)) continue;
       estado.fotos.set(f.slotId, { ...f, url: f.blob ? URL.createObjectURL(f.blob) : null });
       maisAntiga = Math.min(maisAntiga || f.salvaEm, f.salvaEm);
     }
-    if (estado.fotos.size) {
+    if (estado.fotos.size || estado.avarias.size) {
       const r = $("#v-retomada");
       r.textContent = `Há ${estado.fotos.size} foto(s) de um teste anterior neste aparelho. Elas são apagadas sozinhas às ${hora(maisAntiga + EXPIRA_MS)}.`;
       r.hidden = false;
@@ -160,7 +176,16 @@
         mudou = true;
       }
     }
+    for (const [id, a] of estado.avarias) {
+      if (agora - a.salvaEm >= EXPIRA_MS) {
+        if (a.close && a.close.url) URL.revokeObjectURL(a.close.url);
+        estado.avarias.delete(id);
+        await banco.apagarFoto(`avaria:${id}`);
+        mudou = true;
+      }
+    }
     if (mudou && !el.telas.revisao.hidden) renderRevisao();
+    if (mudou && !el.telas.avarias.hidden) renderAvarias();
   }
 
   /* ---------- Câmera ---------- */
@@ -338,7 +363,7 @@
 
   /* ---------- Nível do celular (camada inclinação) ---------- */
   function atualizarNivel(i) {
-    const slot = slots[estado.indice];
+    const slot = slotAtual();
     if (!camadas.inclinacao || !slot || !slot.externo || el.telas.captura.hidden) { el.nivel.hidden = true; return; }
     el.nivel.hidden = false;
     const r = P.avaliarInclinacao(i, slot, L);
@@ -363,7 +388,7 @@
     if (t && t.pausaDesde) { t.pausas.push([t.pausaDesde, Date.now()]); t.pausaDesde = null; }
   }
   const trilhaAtiva = () => {
-    const slot = slots[estado.indice];
+    const slot = slotAtual();
     return Boolean(camadas.continuidade && estado.trilha && slot && slot.externo);
   };
   function atualizarTrilhaStatus() {
@@ -418,6 +443,7 @@
 
   async function irPara(indice) {
     fimPausaTrilha();
+    estado.especial = null;
     estado.indice = indice;
     const slot = slots[indice];
     estado.inicioSlot[slot.id] = estado.inicioSlot[slot.id] || Date.now();
@@ -429,6 +455,7 @@
     $("#v-slot-nome").textContent = slot.nome;
     $("#v-slot-instrucao").textContent = slot.instrucao;
     el.pular.hidden = !slot.opcional;
+    el.pular.textContent = "Pular (não se aplica)";
     mostrar("captura");
     renderSilhueta(slot);
     el.orientacao.hidden = !(camadas.inclinacao && slot.externo && incl.precisaPermissao() && !incl.ativo);
@@ -453,7 +480,7 @@
   }
 
   async function capturar(origemArquivo) {
-    const slot = slots[estado.indice];
+    const slot = slotAtual();
     if (!geoOk()) { atualizarBotao(); return; } // localização obrigatória
     el.capturar.disabled = true;
     estado.capturando = true;
@@ -534,11 +561,15 @@
   /* ---------- Decisão (todas as camadas) ---------- */
   const ACEITAS = new Set(["aprovada", "forcada"]);
   function avaliar(foto) {
-    const slot = slots.find((s) => s.id === foto.slotId);
+    const slot = slotDe(foto.slotId);
     const erros = [], avisos = [], extras = {};
     const juntar = (r) => { erros.push(...(r.erros || [])); avisos.push(...(r.avisos || [])); };
     const m = foto.medidas;
     if (camadas.qualidade) juntar(Q.avaliarQualidade(m, slot, L));
+    if (slot.id === CLOSE.id) {
+      if (foto.geo && foto.geo.precisaoM > L.geoPrecisaoMaxM) avisos.push({ codigo: "precisao", texto: `Localização imprecisa (±${foto.geo.precisaoM} m).`, camada: "geo" });
+      return { aprovada: erros.length === 0, erros, avisos, extras };
+    }
     if (camadas.duplicada) {
       const outras = [...estado.fotos.values()].filter((f) => f.slotId !== foto.slotId && ACEITAS.has(f.status) && f.medidas)
         .map((f) => ({ slotId: f.slotId, nome: nomeDe(f.slotId), hash: f.medidas.hash }));
@@ -601,7 +632,7 @@
   function avaliarEExibir(registrar = true) {
     const foto = estado.pendente;
     if (!foto) return;
-    const slot = slots.find((s) => s.id === foto.slotId);
+    const slot = slotDe(foto.slotId);
     const r = avaliar(foto);
     foto.resultado = r;
     if (registrar) {
@@ -671,6 +702,7 @@
   async function aceitar(forcada) {
     const foto = estado.pendente;
     if (!foto || (!foto.resultado.aprovada && !forcada)) return;
+    if (foto.slotId === CLOSE.id) return aceitarClose(foto);
     const anterior = estado.fotos.get(foto.slotId);
     if (anterior && anterior.url) URL.revokeObjectURL(anterior.url);
     foto.status = foto.resultado.aprovada ? "aprovada" : "forcada";
@@ -687,9 +719,10 @@
   function refazer() {
     if (estado.pendente && estado.pendente.url) URL.revokeObjectURL(estado.pendente.url);
     estado.pendente = null;
-    irPara(estado.indice);
+    if (estado.especial) abrirClose(); else irPara(estado.indice);
   }
   async function pular() {
+    if (estado.especial) { estado.pendente = null; return voltarAoFormulario(); }
     const slot = slots[estado.indice];
     const foto = { slotId: slot.id, status: "pulada", salvaEm: Date.now(), capturadaEm: new Date().toISOString(), tentativa: estado.tentativas[slot.id] || 0 };
     estado.fotos.set(slot.id, foto);
@@ -699,7 +732,187 @@
   }
   function avancar() {
     const i = proximoPendente(estado.indice + 1);
-    if (i < 0) { renderRevisao(); mostrar("revisao"); } else irPara(i);
+    if (i >= 0) return irPara(i);
+    // Fim dos ângulos: passo das avarias (se ainda não respondido), depois a revisão
+    if (!estado.declaracaoAvarias) { renderAvarias(); mostrar("avarias"); } else { renderRevisao(); mostrar("revisao"); }
+  }
+
+  /* ---------- Avarias (marcação manual) ----------
+   * Cada avaria: foto de referência + ponto tocado (x, y de 0 a 1 na área da foto, sem a faixa
+   * do carimbo), tipo, região, observação e uma foto de perto (mesma câmera, validações de
+   * qualidade, GPS e carimbo). A declaração "não tem avarias" também vai para o relatório.
+   */
+  const avariasOrdenadas = () => [...estado.avarias.values()].sort((a, b) => a.criadaEm - b.criadaEm);
+  function renderAvarias() {
+    const lista = avariasOrdenadas();
+    const dec = $("#v-avarias-declaracao");
+    dec.hidden = !(estado.declaracaoAvarias === "sem" && !lista.length);
+    dec.textContent = "Você declarou que o veículo não tem avarias. Se encontrar alguma, registre abaixo.";
+    $("#v-sem-avarias").hidden = lista.length > 0 || estado.declaracaoAvarias === "sem";
+    $("#v-avaria-nova").disabled = lista.length >= CFG.avarias.maximo;
+    $("#v-avarias-lista").innerHTML = lista.map((a, i) => `
+      <li class="v-item v-item--avaria">
+        ${a.close && a.close.url ? `<img src="${esc(a.close.url)}" alt="" width="160" height="90">` : '<span class="v-item__vazio" aria-hidden="true"></span>'}
+        <span class="v-item__texto"><strong>${i + 1}. ${esc(a.tipo)} · ${esc(a.regiao)}</strong>
+          <span class="v-item__status">${a.refSlot ? `Marcada na foto “${esc(nomeDe(a.refSlot))}”` : "Não aparece nas fotos dos ângulos"}</span>
+          ${a.observacao ? `<span class="v-nota">${esc(a.observacao)}</span>` : ""}</span>
+        <button class="btn btn--outline" type="button" data-remover-avaria="${esc(a.id)}">Remover<span class="visually-hidden"> avaria ${i + 1}</span></button>
+      </li>`).join("");
+  }
+
+  function novaAvaria() {
+    if (estado.avarias.size >= CFG.avarias.maximo) return;
+    estado.rascunho = { id: `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`, refSlot: null, semFoto: false, ponto: null, tipo: null, regiao: "", observacao: "", close: null };
+    renderAvariaForm();
+    mostrar("avaria");
+  }
+
+  function renderAvariaForm() {
+    const r = estado.rascunho;
+    if (!r) return;
+    $("#v-avaria-titulo").textContent = `Avaria ${estado.avarias.size + 1}`;
+    // 1. Fotos dos ângulos já aceitas (externas e internas), ou "não aparece nas fotos"
+    const fotos = slots.filter((s) => { const f = estado.fotos.get(s.id); return f && f.url; });
+    $("#v-avaria-fotos").innerHTML = fotos.map((s) => `
+      <button class="v-avaria-foto" type="button" data-ref="${esc(s.id)}" aria-pressed="${r.refSlot === s.id}">
+        <img src="${esc(estado.fotos.get(s.id).url)}" alt="">${esc(s.nome)}</button>`).join("") +
+      `<button class="v-avaria-foto v-avaria-foto--nenhuma" type="button" data-ref="" aria-pressed="${r.semFoto}">Não aparece nas fotos</button>`;
+    // 2. Marcação do ponto
+    const ref = r.refSlot && estado.fotos.get(r.refSlot);
+    $("#v-avaria-marcar").hidden = !ref;
+    if (ref) {
+      const img = $("#v-avaria-ref-img");
+      if (img.getAttribute("src") !== ref.url) img.src = ref.url;
+      posicionarPonto();
+    }
+    // 3 e 4. Tipo e região
+    $("#v-avaria-tipos").innerHTML = CFG.avarias.tipos.map((t) => `
+      <label class="v-opcao"><input type="radio" name="avaria-tipo" value="${esc(t)}"${r.tipo === t ? " checked" : ""}><span>${esc(t)}</span></label>`).join("");
+    $("#v-avaria-regiao").innerHTML = `<option value="">Escolha a região</option>` +
+      tipo.regioesAvaria.map((g) => `<option${r.regiao === g ? " selected" : ""}>${esc(g)}</option>`).join("");
+    $("#v-avaria-obs").value = r.observacao;
+    // 5. Foto de perto
+    const img = $("#v-avaria-close-img");
+    img.hidden = !(r.close && r.close.url);
+    if (r.close && r.close.url) img.src = r.close.url;
+    $("#v-avaria-close").textContent = r.close ? "Tirar outra foto de perto" : "Tirar foto de perto";
+    $("#v-avaria-erro").hidden = true;
+  }
+
+  // O ponto é guardado na área da FOTO (a imagem guardada tem a faixa do carimbo embaixo)
+  function alturaUtil(img, f) {
+    return f && f.largura && img.naturalWidth ? f.altura * (img.naturalWidth / f.largura) : img.naturalHeight;
+  }
+  function posicionarPonto() {
+    const r = estado.rascunho, ponto = $("#v-avaria-ponto"), img = $("#v-avaria-ref-img");
+    if (!r || !r.ponto || !img.naturalHeight) { ponto.hidden = true; return; }
+    const f = estado.fotos.get(r.refSlot);
+    const fracao = alturaUtil(img, f) / img.naturalHeight;
+    Object.assign(ponto.style, { left: `${r.ponto.x * 100}%`, top: `${r.ponto.y * fracao * 100}%` });
+    ponto.hidden = false;
+  }
+  function marcarPonto(e) {
+    const r = estado.rascunho, img = $("#v-avaria-ref-img");
+    if (!r || !r.refSlot || !img.naturalHeight) return;
+    const caixa = img.getBoundingClientRect();
+    const f = estado.fotos.get(r.refSlot);
+    const fracao = alturaUtil(img, f) / img.naturalHeight;
+    const lim = (v) => Math.min(1, Math.max(0, v));
+    r.ponto = {
+      x: Math.round(lim((e.clientX - caixa.left) / caixa.width) * 1000) / 1000,
+      y: Math.round(lim((e.clientY - caixa.top) / caixa.height / fracao) * 1000) / 1000
+    };
+    posicionarPonto();
+  }
+
+  // Foto de perto: usa a mesma tela de câmera, com o passo especial
+  async function abrirClose() {
+    fimPausaTrilha();
+    estado.especial = CLOSE;
+    estado.inicioSlot[CLOSE.id] = estado.inicioSlot[CLOSE.id] || Date.now();
+    $("#v-progresso-fill").style.width = "100%";
+    $("#v-progresso-texto").textContent = `Avaria ${estado.avarias.size + 1}${estado.rascunho && estado.rascunho.tipo ? ` · ${estado.rascunho.tipo}` : ""}${estado.rascunho && estado.rascunho.regiao ? ` · ${estado.rascunho.regiao}` : ""}`;
+    $("#v-slot-nome").textContent = CLOSE.nome;
+    $("#v-slot-instrucao").textContent = CLOSE.instrucao;
+    el.pular.hidden = false;
+    el.pular.textContent = "Voltar";
+    mostrar("captura");
+    renderSilhueta(CLOSE);
+    el.nivel.hidden = true;
+    el.orientacao.hidden = true;
+    await abrirCamera();
+    atualizarBotao();
+  }
+  function aceitarClose(foto) {
+    const r = estado.rascunho;
+    foto.status = foto.resultado.aprovada ? "aprovada" : "forcada";
+    foto.duracaoMs = Date.now() - (estado.inicioSlot[CLOSE.id] || Date.now());
+    delete estado.inicioSlot[CLOSE.id];
+    estado.pendente = null;
+    estado.especial = null;
+    if (r) {
+      if (r.close && r.close.url) URL.revokeObjectURL(r.close.url);
+      r.close = foto;
+    }
+    banco.salvarMeta();
+    voltarAoFormulario();
+  }
+  function voltarAoFormulario() {
+    estado.especial = null;
+    el.pular.textContent = "Pular (não se aplica)";
+    if (!estado.rascunho) { renderAvarias(); mostrar("avarias"); return; }
+    renderAvariaForm();
+    mostrar("avaria");
+  }
+
+  async function salvarAvaria() {
+    const r = estado.rascunho;
+    if (!r) return;
+    r.observacao = $("#v-avaria-obs").value.trim().slice(0, 200);
+    const faltando = [];
+    if (!r.refSlot && !r.semFoto) faltando.push("escolha em qual foto a avaria aparece (ou “Não aparece nas fotos”)");
+    if (r.refSlot && !r.ponto) faltando.push("toque no ponto da avaria na foto");
+    if (!r.tipo) faltando.push("escolha o tipo");
+    if (!r.regiao) faltando.push("escolha a região");
+    if (!r.close) faltando.push("tire a foto de perto");
+    if (faltando.length) {
+      const e = $("#v-avaria-erro");
+      e.textContent = `Falta: ${faltando.join("; ")}.`;
+      e.hidden = false;
+      return;
+    }
+    const avaria = { ...r, criadaEm: Date.now(), salvaEm: Date.now() };
+    estado.avarias.set(avaria.id, avaria);
+    estado.declaracaoAvarias = "com";
+    estado.rascunho = null;
+    await banco.salvarAvaria(avaria);
+    await banco.salvarMeta();
+    vibrar(40);
+    renderAvarias();
+    mostrar("avarias");
+  }
+  function cancelarAvaria() {
+    const r = estado.rascunho;
+    if (r && r.close && r.close.url) URL.revokeObjectURL(r.close.url);
+    estado.rascunho = null;
+    renderAvarias();
+    mostrar("avarias");
+  }
+  async function removerAvaria(id) {
+    const a = estado.avarias.get(id);
+    if (!a || !window.confirm(`Remover a avaria “${a.tipo} · ${a.regiao}”?`)) return;
+    if (a.close && a.close.url) URL.revokeObjectURL(a.close.url);
+    estado.avarias.delete(id);
+    if (!estado.avarias.size) estado.declaracaoAvarias = null;
+    await banco.apagarFoto(`avaria:${id}`);
+    await banco.salvarMeta();
+    renderAvarias();
+  }
+  async function declararSemAvarias() {
+    estado.declaracaoAvarias = "sem";
+    await banco.salvarMeta();
+    renderRevisao();
+    mostrar("revisao");
   }
 
   /* ---------- Revisão ---------- */
@@ -708,6 +921,8 @@
     const prontas = slots.filter((s) => estado.fotos.has(s.id)).length;
     $("#v-revisao-resumo").textContent = `${prontas} de ${slots.length} ângulos concluídos.`;
     $("#v-continuar").hidden = prontas === slots.length;
+    const n = estado.avarias.size;
+    $("#v-revisao-avarias-status").textContent = n ? `${n} avaria(s) registrada(s)` : estado.declaracaoAvarias === "sem" ? "Declarado: o veículo não tem avarias" : "Ainda não respondido";
     $("#v-grade").innerHTML = slots.map((s, i) => {
       const f = estado.fotos.get(s.id);
       const st = f ? f.status : "pendente";
@@ -776,6 +991,22 @@
           relogioDiferencaS: f.geo && f.geo.gpsEm ? Math.round((Date.parse(f.capturadaEm) - f.geo.gpsEm) / 1000) : null
         };
       }),
+      avarias: {
+        declaracao: estado.avarias.size ? "com-avarias" : estado.declaracaoAvarias === "sem" ? "sem-avarias" : "nao-respondido",
+        itens: avariasOrdenadas().map((a, i) => ({
+          numero: i + 1, tipo: a.tipo, regiao: a.regiao, observacao: a.observacao || null,
+          fotoReferencia: a.refSlot ? { slot: a.refSlot, nome: nomeDe(a.refSlot) } : null,
+          ponto: a.ponto, // x, y de 0 a 1 na área da foto de referência (sem a faixa do carimbo)
+          criadaEm: new Date(a.criadaEm).toISOString(),
+          close: a.close ? {
+            status: a.close.status, capturadaEm: a.close.capturadaEm, carimbo: a.close.carimbo || null,
+            geo: a.close.geo ? { lat: a.close.geo.lat, lon: a.close.geo.lon, precisaoM: a.close.geo.precisaoM } : null,
+            motivos: a.close.resultado ? a.close.resultado.erros.map((e) => e.codigo) : [],
+            avisos: a.close.resultado ? a.close.resultado.avisos.map((e) => e.codigo) : [],
+            nitidezCentro: a.close.medidas ? arred(a.close.medidas.nitidezCentro, 1) : null
+          } : null
+        }))
+      },
       historico: estado.historico
     };
   }
@@ -832,6 +1063,28 @@
       if (bmp.close) bmp.close();
       arquivos.push({ nome: `miniaturas/${String(i + 1).padStart(2, "0")}-${s.id}.jpg`, dados: new Uint8Array(await mini.arrayBuffer()) });
     }
+    for (const [i, a] of avariasOrdenadas().entries()) {
+      const n = String(i + 1).padStart(2, "0");
+      if (a.close && a.close.blob) {
+        const bmp = await createImageBitmap(a.close.blob);
+        const mini = await paraBlob(canvasDe(bmp, bmp.width, bmp.height, 800), 0.85);
+        if (bmp.close) bmp.close();
+        arquivos.push({ nome: `avarias/${n}-perto.jpg`, dados: new Uint8Array(await mini.arrayBuffer()) });
+      }
+      const ref = a.refSlot && estado.fotos.get(a.refSlot);
+      if (ref && ref.blob && a.ponto) {
+        const bmp = await createImageBitmap(ref.blob);
+        const c = canvasDe(bmp, bmp.width, bmp.height, 800);
+        if (bmp.close) bmp.close();
+        const g = c.getContext("2d"), k = c.width / ref.largura;
+        const x = a.ponto.x * c.width, y = a.ponto.y * ref.altura * k, raio = Math.max(14, c.width * 0.03);
+        g.lineWidth = Math.max(3, raio * 0.25);
+        g.strokeStyle = "#FFFFFF"; g.beginPath(); g.arc(x, y, raio + g.lineWidth / 2, 0, Math.PI * 2); g.stroke();
+        g.strokeStyle = "#FF3B30"; g.beginPath(); g.arc(x, y, raio, 0, Math.PI * 2); g.stroke();
+        const marcada = await paraBlob(c, 0.85);
+        arquivos.push({ nome: `avarias/${n}-marcacao.jpg`, dados: new Uint8Array(await marcada.arrayBuffer()) });
+      }
+    }
     baixar(zip(arquivos), nomeArquivo("zip"));
   }
 
@@ -845,6 +1098,12 @@
     estado.historico = [];
     estado.inicioSlot = {};
     estado.trilha = null;
+    for (const a of estado.avarias.values()) if (a.close && a.close.url) URL.revokeObjectURL(a.close.url);
+    if (estado.rascunho && estado.rascunho.close && estado.rascunho.close.url) URL.revokeObjectURL(estado.rascunho.close.url);
+    estado.avarias.clear();
+    estado.rascunho = null;
+    estado.declaracaoAvarias = null;
+    estado.especial = null;
     await banco.limpar();
     $("#v-retomada").hidden = true;
     $("#v-ir-revisao").hidden = true;
@@ -861,7 +1120,7 @@
       salvarAjustes();
       if (estado.pendente && !el.telas.resultado.hidden) avaliarEExibir(false);
       if (!el.telas.revisao.hidden) renderRevisao();
-      if (!el.telas.captura.hidden) renderSilhueta(slots[estado.indice]);
+      if (!el.telas.captura.hidden) renderSilhueta(slotAtual());
     };
     const nomes = { qualidade: "Qualidade", mesmoVeiculo: "Mesmo veículo (aviso)", continuidade: "Continuidade (aviso)", duplicada: "Duplicada (aviso)", espelho: "Lado repetido (aviso)", silhueta: "Silhueta", inclinacao: "Inclinação", deteccao: "Detecção do veículo", angulo: "Ângulo estimado" };
     $("#v-camadas").insertAdjacentHTML("beforeend", Object.keys(camadas).map((k) =>
@@ -936,6 +1195,29 @@
     if (b) irPara(Number(b.dataset.refazer));
   });
   $("#v-relatorio").addEventListener("click", () => baixarJson(relatorio(), nomeArquivo("json")));
+  // Avarias
+  $("#v-ir-avarias").addEventListener("click", () => { renderAvarias(); mostrar("avarias"); });
+  $("#v-avaria-nova").addEventListener("click", novaAvaria);
+  $("#v-sem-avarias").addEventListener("click", declararSemAvarias);
+  $("#v-avarias-concluir").addEventListener("click", () => { renderRevisao(); mostrar("revisao"); });
+  $("#v-avarias-lista").addEventListener("click", (e) => { const b = e.target.closest("[data-remover-avaria]"); if (b) removerAvaria(b.dataset.removerAvaria); });
+  $("#v-avaria-fotos").addEventListener("click", (e) => {
+    const b = e.target.closest("[data-ref]");
+    const r = estado.rascunho;
+    if (!b || !r) return;
+    r.refSlot = b.dataset.ref || null;
+    r.semFoto = !b.dataset.ref;
+    r.ponto = null;
+    renderAvariaForm();
+  });
+  $("#v-avaria-ref-img").addEventListener("click", marcarPonto);
+  $("#v-avaria-ref-img").addEventListener("load", posicionarPonto);
+  $("#v-avaria-tipos").addEventListener("change", (e) => { if (estado.rascunho) estado.rascunho.tipo = e.target.value; });
+  $("#v-avaria-regiao").addEventListener("change", (e) => { if (estado.rascunho) estado.rascunho.regiao = e.target.value; });
+  $("#v-avaria-obs").addEventListener("input", (e) => { if (estado.rascunho) estado.rascunho.observacao = e.target.value; });
+  $("#v-avaria-close").addEventListener("click", () => { if (estado.rascunho) abrirClose(); });
+  $("#v-avaria-salvar").addEventListener("click", salvarAvaria);
+  $("#v-avaria-cancelar").addEventListener("click", cancelarAvaria);
   $("#v-zip").addEventListener("click", baixarZip);
   document.addEventListener("visibilitychange", () => { if (document.hidden) pararCamera(); else if (!el.telas.captura.hidden) abrirCamera(); });
 

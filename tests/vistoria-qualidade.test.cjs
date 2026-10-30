@@ -134,6 +134,11 @@ test("configuração: três tipos, ids únicos, silhueta existente e codigoTipoS
   // Cor só no carro: em moto (caixa quase toda fundo) daria erro
   assert.deepEqual(Object.values(CFG.tipos).map((t) => t.compararCor), [true, false]);
   assert.equal(CFG.carimbo.logo, "assets/logo-claro.svg");
+  // Avarias: tipos, regiões por tipo de veículo e o passo da foto de perto (silhueta "alvo")
+  assert.ok(CFG.avarias.tipos.length >= 5);
+  for (const t of Object.values(CFG.tipos)) assert.ok(t.regioesAvaria.length >= 10 && t.regioesAvaria.includes("Outra"));
+  assert.ok(SIL[CFG.avarias.close.silhueta]);
+  assert.equal(CFG.avarias.close.legibilidade, true, "a avaria precisa ficar nítida no centro");
 });
 
 test("mesmo veículo: cor diferente, moto x carro, longe e muito depois avisam; o mesmo carro não", () => {

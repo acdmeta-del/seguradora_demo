@@ -105,11 +105,66 @@
       <h2 id="v-revisao-titulo">Revisão das fotos</h2>
       <p id="v-revisao-resumo"></p>
       <ul class="v-grade" id="v-grade"></ul>
+      <div class="v-item v-item--avarias" id="v-revisao-avarias">
+        <span class="v-item__texto"><strong>Avarias</strong><span class="v-item__status" id="v-revisao-avarias-status"></span></span>
+        <button class="btn btn--outline" type="button" id="v-ir-avarias">Avarias</button>
+      </div>
       <div class="v-acoes">
         <button class="btn btn--primary btn--block" type="button" id="v-continuar">Continuar fotos</button>
         <button class="btn btn--outline btn--block" type="button" id="v-relatorio">Exportar relatório do teste (JSON)</button>
         <button class="btn btn--outline btn--block" type="button" id="v-zip">Baixar relatório + miniaturas (ZIP)</button>
         <button class="btn btn--outline btn--block v-perigo" type="button" id="v-limpar">Limpar tudo</button>
+      </div>
+    </section>
+
+    <!-- 5. Avarias: lista e declaração -->
+    <section class="v-tela" id="v-avarias" aria-labelledby="v-avarias-titulo" hidden>
+      <h2 id="v-avarias-titulo">Avarias</h2>
+      <p>Registre riscos, amassados, trincas, peças quebradas ou faltando. Para cada avaria, marque o ponto numa das fotos e tire uma foto de perto.</p>
+      <p class="v-retomada" id="v-avarias-declaracao" hidden></p>
+      <ul class="v-grade" id="v-avarias-lista"></ul>
+      <div class="v-acoes">
+        <button class="btn btn--primary btn--block v-btn-grande" type="button" id="v-avaria-nova">Registrar avaria</button>
+        <button class="btn btn--outline btn--block" type="button" id="v-sem-avarias">O veículo não tem avarias</button>
+        <button class="btn btn--outline btn--block" type="button" id="v-avarias-concluir">Concluir e revisar</button>
+      </div>
+    </section>
+
+    <!-- 6. Avaria: marcação manual -->
+    <section class="v-tela" id="v-avaria" aria-labelledby="v-avaria-titulo" hidden>
+      <h2 id="v-avaria-titulo">Nova avaria</h2>
+      <fieldset class="v-campo">
+        <legend>1. Em qual foto a avaria aparece?</legend>
+        <div class="v-avaria-fotos" id="v-avaria-fotos"></div>
+      </fieldset>
+      <div class="v-campo" id="v-avaria-marcar" hidden>
+        <p class="v-campo__titulo">2. Toque no ponto exato da avaria</p>
+        <div class="v-avaria-ref" id="v-avaria-ref">
+          <img id="v-avaria-ref-img" alt="Foto escolhida: toque no ponto da avaria">
+          <span class="v-avaria-ponto" id="v-avaria-ponto" aria-hidden="true" hidden></span>
+        </div>
+      </div>
+      <fieldset class="v-campo">
+        <legend>3. Tipo de avaria</legend>
+        <div class="v-opcoes" id="v-avaria-tipos"></div>
+      </fieldset>
+      <div class="v-campo field">
+        <label for="v-avaria-regiao">4. Região</label>
+        <select id="v-avaria-regiao"></select>
+      </div>
+      <div class="v-campo field">
+        <label for="v-avaria-obs">Observação (opcional)</label>
+        <textarea id="v-avaria-obs" rows="2" maxlength="200" placeholder="Ex.: risco de uns 10 cm perto da maçaneta"></textarea>
+      </div>
+      <div class="v-campo">
+        <p class="v-campo__titulo">5. Foto de perto</p>
+        <img class="v-avaria-close" id="v-avaria-close-img" alt="Foto de perto da avaria" hidden>
+        <button class="btn btn--outline btn--block" type="button" id="v-avaria-close">Tirar foto de perto</button>
+      </div>
+      <p class="quote-form__error" id="v-avaria-erro" role="alert" hidden></p>
+      <div class="v-acoes">
+        <button class="btn btn--primary btn--block v-btn-grande" type="button" id="v-avaria-salvar">Salvar avaria</button>
+        <button class="btn btn--outline btn--block" type="button" id="v-avaria-cancelar">Cancelar</button>
       </div>
     </section>
 

@@ -223,6 +223,8 @@
     "moto-diagonal-frontal": motoLado({ rf: 26, rt: 22, ry: 34 }),
     "moto-diagonal-traseira": motoLado({ rf: 20, rt: 28, ry: 34 }),
     "moto-painel": motoPainel,
-    motor
+    motor,
+    // Foto de perto de uma avaria: alvo no centro
+    alvo: '<circle cx="200" cy="112" r="62"/><circle cx="200" cy="112" r="5"/><path d="M200 30v34M200 160v34M118 112h34M248 112h34"/>'
   };
 })(typeof self !== "undefined" ? self : this);
