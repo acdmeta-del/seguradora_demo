@@ -4,6 +4,7 @@
  * código do servidor, .env, docs ou testes, mesmo que estejam na mesma pasta (dev local).
  * As páginas têm CSP própria em <meta> (testada nos testes do navegador).
  */
+import fs from "node:fs";
 import path from "node:path";
 import express from "express";
 
@@ -19,6 +20,9 @@ function cabecalhoCache(res, arquivo) {
   else if (p.includes("/assets/")) res.setHeader("Cache-Control", "public, max-age=604800");
   else res.setHeader("Cache-Control", "no-cache");
 }
+
+// O site está mesmo na pasta? (diagnóstico: log de início e /healthz)
+export const siteDisponivel = (raiz) => Boolean(raiz) && fs.existsSync(path.join(path.resolve(raiz), "index.html"));
 
 export function servirSite(app, raiz) {
   const base = path.resolve(raiz);

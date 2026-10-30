@@ -19,7 +19,7 @@ import rateLimit from "express-rate-limit";
 import { validarPedido, mascararCpf, mascararPlaca, mascararTelefone } from "./lib/validar.js";
 import { normalizarOrigem } from "./lib/config.js";
 import { verificarTurnstile } from "./lib/turnstile.js";
-import { servirSite } from "./lib/site.js";
+import { servirSite, siteDisponivel } from "./lib/site.js";
 import { montarMensagensVarios, mesmoTelefone } from "./lib/whatsapp.js";
 
 export const MENSAGEM_PADRAO =
@@ -71,7 +71,9 @@ export function criarApp(cfg, deps) {
     maxAge: 600
   }));
 
-  app.get("/healthz", (_req, res) => res.json({ ok: true }));
+  // site: true quando o app também serve o site (Dockerfile da raiz); false = só a API
+  const temSite = siteDisponivel(cfg.siteDir);
+  app.get("/healthz", (_req, res) => res.json({ ok: true, site: temSite }));
 
   // Site e vistoria (só as páginas e pastas da lista de permissão)
   if (cfg.siteDir) servirSite(app, cfg.siteDir);

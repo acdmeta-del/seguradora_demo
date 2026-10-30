@@ -6,6 +6,7 @@ import { lerConfig, conferirConfig } from "./lib/config.js";
 import { criarHinova } from "./lib/hinova.js";
 import { criarWhatsapp } from "./lib/whatsapp.js";
 import { criarApp } from "./app.js";
+import { siteDisponivel } from "./lib/site.js";
 
 const cfg = lerConfig();
 const faltando = conferirConfig(cfg);
@@ -27,4 +28,7 @@ const app = criarApp(cfg, {
 app.listen(cfg.porta, () => {
   console.info(`Intermediário no ar na porta ${cfg.porta} (modo: ${cfg.modo}, WhatsApp: ${cfg.whatsapp.provedor}, Hinova: ${cfg.hinova.modoAuth})`);
   console.info(`Origens permitidas: ${cfg.origens.join(", ") || "TODAS (ALLOWED_ORIGINS vazio)"}`);
+  console.info(siteDisponivel(cfg.siteDir)
+    ? `Site: servindo ${cfg.siteDir}`
+    : `Site: DESLIGADO, só a API (SITE_DIR="${cfg.siteDir}"). Para o site, use o Dockerfile da raiz (Build path "/").`);
 });

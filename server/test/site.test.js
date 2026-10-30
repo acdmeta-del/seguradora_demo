@@ -57,9 +57,10 @@ test("site: páginas e pastas públicas com os cabeçalhos de segurança e cache
   assert.match((await fetch(`${s.base}/assets/logo.svg`)).headers.get("cache-control"), /max-age=604800/);
   assert.equal((await fetch(`${s.base}/js/vistoria.js`)).headers.get("cache-control"), "no-cache");
 
-  // A API continua com a CSP restritiva do helmet
+  // A API continua com a CSP restritiva do helmet; /healthz diz se o site está sendo servido
   const saude = await fetch(`${s.base}/healthz`);
   assert.ok(saude.headers.get("content-security-policy"));
+  assert.deepEqual(await saude.json(), { ok: true, site: true });
 });
 
 test("site: nada fora da lista de permissão (servidor, .env, docs, testes, git, ../)", async (t) => {
@@ -83,5 +84,5 @@ test("site: nada fora da lista de permissão (servidor, .env, docs, testes, git,
 test("site: sem SITE_DIR, o app é só a API", async (t) => {
   const s = await subir({ SITE_DIR: "" }); t.after(s.fim);
   assert.equal((await fetch(`${s.base}/`)).status, 404);
-  assert.equal((await fetch(`${s.base}/healthz`)).status, 200);
+  assert.deepEqual(await (await fetch(`${s.base}/healthz`)).json(), { ok: true, site: false });
 });
