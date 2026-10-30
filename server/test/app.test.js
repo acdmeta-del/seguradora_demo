@@ -224,3 +224,17 @@ test("só CPF (placa em branco): envia todos os boletos ao WhatsApp cadastrado, 
   assert.equal(outro.texto, comPlaca.texto);
   assert.equal(await s.app.locals.ultimoProcesso, "veiculo_nao_encontrado");
 });
+
+test("falha da Hinova: o log traz o motivo da resposta (sem dados pessoais) e o site recebe a resposta genérica", async (t) => {
+  const cfg = lerConfig({ MODO: "producao", ALLOWED_ORIGINS: ORIGEM, TURNSTILE_SECRET: "x", RESPOSTA_MIN_MS: "0" });
+  const erros = [];
+  const hinova = { async consultar() { const e = new Error("Hinova: erro HTTP 401 em /listar/boleto-associado-veiculo"); e.diagnostico = { mensagens: ["mensagem: Token inválido"] }; throw e; } };
+  const app = criarApp(cfg, { hinova, whatsapp: { async enviar() {} }, turnstile: async () => true, log: { info() {}, error: (m) => erros.push(m) } });
+  const server = await new Promise((r) => { const s = app.listen(0, () => r(s)); });
+  t.after(() => new Promise((r) => server.close(r)));
+  const r = await fetch(`http://127.0.0.1:${server.address().port}/api/boleto`, { method: "POST", headers: { "Content-Type": "application/json", Origin: ORIGEM }, body: JSON.stringify(valido) });
+  assert.deepEqual(await r.json(), { ok: true, mensagem: MENSAGEM_PADRAO });
+  assert.equal(await app.locals.ultimoProcesso, "erro");
+  assert.match(erros[0], /HTTP 401 em \/listar\/boleto-associado-veiculo \| resposta: mensagem: Token inválido/);
+  assert.ok(!erros[0].includes(CPF_TITULAR));
+});

@@ -144,7 +144,11 @@ export function criarApp(cfg, deps) {
     // Processa em segundo plano: o tempo de resposta não depende do resultado
     if (limiteCpf(pedido.cpf)) {
       app.locals.ultimoProcesso = processar(pedido).catch((e) => {
-        log.error(`[boleto] falha: ${e.message}`);
+        // Motivo devolvido pela Hinova (ex.: "Token inválido"): só os campos de mensagem do erro,
+        // nunca o payload (lib/hinova.js, diagnosticar)
+        const motivo = e.diagnostico && e.diagnostico.mensagens && e.diagnostico.mensagens.length
+          ? ` | resposta: ${e.diagnostico.mensagens.join(" | ").slice(0, 300)}` : "";
+        log.error(`[boleto] falha: ${e.message}${motivo}`);
         return "erro";
       });
     } else {
