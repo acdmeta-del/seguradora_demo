@@ -70,7 +70,7 @@ compatibilidade da CSP com o diálogo e com `fetch`.
 
 `vistoria-teste.html` valida, só no navegador, a experiência de tirar as fotos da vistoria. Ela não aparece no menu (`noindex,nofollow`, acesso direto pela URL) e **não faz nenhuma chamada de rede com fotos ou dados**. Nada de Hinova, nada de `server/`, nada de Turnstile. As fotos ficam na memória e no IndexedDB do aparelho e **expiram sozinhas em 4 horas** (`armazenamento.expiraHoras`). "Limpar tudo" apaga na hora.
 
-- **Endereço:** `https://acdmeta-del.github.io/seguradora_demo/vistoria-teste.html`. Para o modo desenvolvedor, acrescente `?dev=1`.
+- **Endereço:** `https://<domínio de produção>/vistoria-teste.html` no Easypanel (até a troca: `https://acdmeta-del.github.io/seguradora_demo/vistoria-teste.html`). Para o modo desenvolvedor, acrescente `?dev=1`.
 - **Celular:** abra o endereço acima. A câmera e a localização exigem HTTPS, que o GitHub Pages já fornece.
 - **Computador:** `npx http-server -p 8080` (ou outro servidor estático) e `http://localhost:8080/vistoria-teste.html?dev=1`. `localhost` conta como endereço seguro. Por IP da rede (`http://192.168...`) a câmera **não** abre: use um túnel HTTPS ou o GitHub Pages.
 
@@ -150,9 +150,11 @@ O atalho "2ª via de boleto" abre um pop-up que pede o **CPF do titular** e, opc
 - **Só CPF**: envia os boletos em aberto de todos os veículos do titular (a listagem usa `cpf_associado`), do vencimento mais antigo ao mais novo, até `HINOVA_MAX_BOLETOS_CPF` (padrão 4). No WhatsApp vai uma apresentação ("Encontramos N boletos em aberto") e, para cada boleto, o resumo com o veículo (modelo e **só o final da placa**, ex.: `placa final 3D63`) seguido do PIX sozinho. Boleto repetido (mesmo `nosso_numero`) conta uma vez.
 
 ```
-Site (GitHub Pages) ──CPF (+placa)+token anti-robô──▶ Intermediário (VPS / Easypanel) ──▶ SGA Hinova
-                                                            └──▶ Z-API (WhatsApp) ──▶ celular cadastrado
+Navegador ──▶ App Integra (VPS / Easypanel): site + vistoria + /api/boleto ──▶ SGA Hinova
+                                                   └──▶ Z-API (WhatsApp) ──▶ celular cadastrado
 ```
+
+Em produção o site, a página de vistoria e a API são **um app só** no Easypanel (mesmo domínio): a página chama `/api/boleto` no próprio site. A cópia de demonstração no GitHub Pages usa `boleto.endpointGithubPages` (endereço completo da API) até ser desligada.
 
 Enquanto `boleto.endpoint` estiver vazio em `content/content.js`, o pop-up funciona em **modo demonstração** (resposta simulada, sem consulta).
 
@@ -167,18 +169,22 @@ Enquanto `boleto.endpoint` estiver vazio em `content/content.js`, o pop-up funci
 | Outros sites usando a API | CORS e conferência do `Origin`: só `ALLOWED_ORIGINS`. |
 | Dados pessoais em logs | CPF, placa e telefone sempre mascarados. |
 
-### Implantação do intermediário no Easypanel
+### Implantação no Easypanel (site + vistoria + API, num app só)
 
-1. **Novo App** a partir deste repositório GitHub. Build: `Dockerfile`, caminho `server/`.
-2. **Environment**: copie as variáveis de `server/.env.example` e preencha (Hinova, Turnstile, Z-API). Comece com `MODO=homologacao` e seu número em `WHATSAPP_TESTE_PERMITIDOS`.
+O `Dockerfile` da **raiz** monta a imagem com a API (`server/`) e o site (`index.html`, `vistoria-teste.html`, `css/`, `js/`, `content/`, `assets/` em `/app/public`). O servidor só entrega as páginas e pastas dessa lista (`server/lib/site.js`): código do servidor, `.env`, `docs/` e testes nunca saem, mesmo com `../` no endereço. O build **falha** se faltar alguma dependência do npm.
+
+1. **App**: no app que hoje roda a API (ou num novo), em Source aponte para este repositório, branch `main`, **Build path `/`** e **Dockerfile `Dockerfile`** (o `server/Dockerfile` antigo é só a API e fica como legado).
+2. **Environment**: as mesmas variáveis de hoje (`server/.env.example`): Hinova, Turnstile, Z-API, `MODO`. `SITE_DIR` já vem no Dockerfile. Ajuste:
+   - `ALLOWED_ORIGINS`: o domínio de produção (ex.: `https://www.integra.com.br`) e, enquanto existir, `https://acdmeta-del.github.io`, separados por vírgula.
+   - `TURNSTILE_HOSTNAMES`: o domínio de produção (e `acdmeta-del.github.io`, enquanto existir).
    - **Hinova** (documentação, seção 1): `HINOVA_TOKEN_SGA` é o token gerado no SGA em Área do cliente → APIs → Gerenciar APIs. Com `HINOVA_USUARIO` e `HINOVA_SENHA` (usuário ATIVO do SGA, de preferência só para a integração), o servidor autentica em `/usuario/autenticar` e usa o `token_usuario` devolvido, que não expira. Alternativa: `HINOVA_TOKEN_USUARIO` com um `token_usuario` já obtido. `HINOVA_TOKEN` continua aceito (legado). Em Gerenciar APIs, marque os endpoints usados: `usuario/autenticar`, `veiculo/buscar`, `listar/boleto-associado-veiculo` e `buscar/boleto`.
    - **Z-API** (`WHATSAPP_PROVIDER=zapi`): `ZAPI_INSTANCE` (ID da instância), `ZAPI_TOKEN` (token da instância) e `ZAPI_CLIENT_TOKEN` (token de segurança da conta, no menu Segurança do painel). Sem os três, o servidor não sobe em produção.
-3. **Domains**: use o subdomínio gratuito `*.easypanel.host` (HTTPS automático) apontando para a porta `3000`.
-4. **Teste a Hinova** no console do App: `npm run testar-hinova -- ABC1D23 52998224725` (placa + CPF) ou `npm run testar-hinova -- 52998224725` (só CPF, todos os veículos). Ele mostra os nomes dos campos das respostas (sem dados pessoais) para ajustar `HINOVA_PATH_*` e `HINOVA_CAMPO_*`, se preciso.
-   **Teste a Z-API**: `npm run testar-whatsapp -- 11987654321` (use o seu número) envia uma mensagem de teste.
-5. **Turnstile**: no painel da Cloudflare, crie um widget para `acdmeta-del.github.io`. A chave de **site** vai em `content/content.js` (`boleto.turnstileSiteKey`); a chave **secreta**, só no Easypanel (`TURNSTILE_SECRET`).
-6. Cole a URL do App + `/api/boleto` em `boleto.endpoint` (`content/content.js`) e faça o commit.
-7. Se a Hinova restringir por IP, peça a liberação do IP da VPS.
-8. Depois de validar com seu número, mude para `MODO=producao`.
+3. **Domains**: adicione o domínio de produção apontando para a porta `3000` (HTTPS automático) e, no provedor de DNS, um registro **A** para o IP da VPS. O subdomínio `*.easypanel.host` pode continuar como reserva. Câmera e GPS da vistoria exigem HTTPS: não use `http://`.
+4. **Turnstile**: no painel da Cloudflare, no widget existente, acrescente o domínio de produção em Hostnames. A chave de **site** fica em `content/content.js` (`boleto.turnstileSiteKey`); a **secreta**, só no Easypanel (`TURNSTILE_SECRET`).
+5. **Teste**: `https://<domínio>/` (site), `https://<domínio>/vistoria-teste.html` (vistoria) e o pop-up da 2ª via. No console do App: `npm run testar-hinova -- 52998224725` e `npm run testar-whatsapp -- 11987654321` (use os seus dados).
+6. Se a Hinova restringir por IP, peça a liberação do IP da VPS. Depois de validar com seu número, `MODO=producao`.
+7. **Depois da troca**: desligue o GitHub Pages (Settings → Pages) e remova `https://acdmeta-del.github.io` de `ALLOWED_ORIGINS`, de `TURNSTILE_HOSTNAMES` e dos hostnames do Turnstile; `boleto.endpointGithubPages` pode sair de `content/content.js`.
+
+**Cache**: biblioteca e modelo de detecção (`js/vendor/`, `assets/modelos/`, com a versão no nome) ficam 1 ano no aparelho; imagens, 1 semana; páginas, scripts e textos são conferidos a cada visita (ETag). Arquivos de texto vão comprimidos (gzip). **Cabeçalhos**: `Permissions-Policy` libera câmera e GPS só para o próprio site; as páginas mantêm a CSP do `<meta>`; a API usa a CSP padrão do helmet.
 
 Testes do intermediário: `cd server && npm install && npm test`.

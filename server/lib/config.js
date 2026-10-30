@@ -20,6 +20,8 @@ export function lerConfig(env = process.env) {
     modo: env.MODO || "simulado",
     // Quantos proxies confiáveis à frente (Traefik do Easypanel = 1)
     trustProxy: num(env.TRUST_PROXY, 1),
+    // Pasta com o site e a vistoria (no Docker da raiz: /app/public). Vazio = só a API
+    siteDir: env.SITE_DIR || "",
     // Origem = esquema + domínio, sem caminho e sem barra final (ex.: https://acdmeta-del.github.io)
     origens: lista(env.ALLOWED_ORIGINS).map(normalizarOrigem),
 

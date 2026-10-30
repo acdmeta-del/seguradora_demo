@@ -174,9 +174,12 @@ window.SITE_CONTENT = {
       geral: "Não foi possível consultar agora. Tente de novo ou fale com a gente pelo WhatsApp."
     },
     sucesso: "Pronto! Se os dados estiverem corretos e houver boleto em aberto, a 2ª via chega no WhatsApp cadastrado em instantes.",
-    // PERSONALIZAR: URL do intermediário no Easypanel, ex.: "https://boleto-integra.xxxx.easypanel.host/api/boleto".
+    // Endereço da API. No Easypanel o site e a API são o mesmo app: "/api/boleto" (mesmo domínio).
     // Vazio = modo demonstração (resposta simulada no navegador, sem consulta real).
-    endpoint: "https://integra-demo.enwglb.easypanel.host/api/boleto",
+    endpoint: "/api/boleto",
+    // Só para a cópia de demonstração no GitHub Pages (outro domínio): endereço completo da API.
+    // PERSONALIZAR: remover quando o GitHub Pages for desligado.
+    endpointGithubPages: "https://integra-demo.enwglb.easypanel.host/api/boleto",
     // PERSONALIZAR: chave de SITE do Cloudflare Turnstile (pública). A chave SECRETA vai só no servidor.
     // Para testes locais, "1x00000000000000000000AA" é a chave de teste da Cloudflare (sempre aprova).
     turnstileSiteKey: "0x4AAAAAAFhTd0XP4HxrEGCP"

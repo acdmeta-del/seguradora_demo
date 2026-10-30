@@ -185,7 +185,8 @@ test("boleto fetch remains allowed by connect-src", async (t) => {
 test("2ª via: placa é opcional; sem placa envia só CPF e a página não mostra dado nenhum", async (t) => {
   const { page, context } = await open(t);
   const bodies = [];
-  await context.route("https://integra-demo.enwglb.easypanel.host/api/boleto", (route) => {
+  // No Easypanel a API é do próprio site: "/api/boleto" no mesmo domínio
+  await context.route(`${origin}/api/boleto`, (route) => {
     bodies.push(JSON.parse(route.request().postData()));
     route.fulfill({ status: 200, contentType: "application/json", headers: { "Access-Control-Allow-Origin": origin }, body: JSON.stringify({ ok: true, mensagem: "genérica" }) });
   });

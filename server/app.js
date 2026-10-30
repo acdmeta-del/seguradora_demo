@@ -1,4 +1,5 @@
 /*
+ * App da Integra no Easypanel: o site e a página de vistoria (cfg.siteDir, lib/site.js) e a API.
  * POST /api/boleto: 2ª via de boleto, com proteções em camadas, nesta ordem:
  *   1. Origem permitida (CORS + conferência do cabeçalho Origin)
  *   2. Limite de requisições por IP e teto global
@@ -13,10 +14,12 @@ import crypto from "node:crypto";
 import express from "express";
 import helmet from "helmet";
 import cors from "cors";
+import compression from "compression";
 import rateLimit from "express-rate-limit";
 import { validarPedido, mascararCpf, mascararPlaca, mascararTelefone } from "./lib/validar.js";
 import { normalizarOrigem } from "./lib/config.js";
 import { verificarTurnstile } from "./lib/turnstile.js";
+import { servirSite } from "./lib/site.js";
 import { montarMensagensVarios, mesmoTelefone } from "./lib/whatsapp.js";
 
 export const MENSAGEM_PADRAO =
@@ -44,7 +47,15 @@ export function criarApp(cfg, deps) {
   const app = express();
 
   app.set("trust proxy", cfg.trustProxy);
-  app.use(helmet());
+  // As páginas trazem a própria CSP (<meta>, testada no navegador); a API usa a CSP padrão do helmet
+  app.use(helmet({ contentSecurityPolicy: false }));
+  app.use(["/api", "/healthz"], helmet.contentSecurityPolicy());
+  // Câmera e GPS só para o próprio site (vistoria); nada de microfone, pagamento etc.
+  app.use((_req, res, next) => {
+    res.setHeader("Permissions-Policy", "camera=(self), geolocation=(self), microphone=(), payment=(), usb=()");
+    next();
+  });
+  app.use(compression());
 
   // CORS: só as origens configuradas (GitHub Pages e, no futuro, o domínio próprio)
   const origemOk = (origem) => !cfg.origens.length || (Boolean(origem) && cfg.origens.includes(normalizarOrigem(origem)));
@@ -61,6 +72,9 @@ export function criarApp(cfg, deps) {
   }));
 
   app.get("/healthz", (_req, res) => res.json({ ok: true }));
+
+  // Site e vistoria (só as páginas e pastas da lista de permissão)
+  if (cfg.siteDir) servirSite(app, cfg.siteDir);
 
   const limiteIp = rateLimit({
     windowMs: cfg.limites.janelaIpMin * 60 * 1000,
@@ -138,6 +152,12 @@ export function criarApp(cfg, deps) {
 
     await esperar(Math.max(0, cfg.limites.respostaMinMs - (Date.now() - inicio)));
     res.json({ ok: true, mensagem: MENSAGEM_PADRAO });
+  });
+
+  // Endereço que não existe: resposta curta, sem detalhes do servidor
+  app.use((req, res) => {
+    if (req.path.startsWith("/api/")) return res.status(404).json({ ok: false, erro: "nao_encontrado" });
+    res.status(404).type("text/plain; charset=utf-8").send("Página não encontrada.");
   });
 
   // JSON malformado, corpo grande demais e demais erros: resposta genérica

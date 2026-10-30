@@ -1,9 +1,10 @@
-# Intermediário da 2ª via de boleto (Easypanel: build path "server", Dockerfile).
+# SÓ A API (legado). Para site + vistoria + API num app só, use o Dockerfile da raiz (Build path "/").
 FROM node:20-alpine
 ENV NODE_ENV=production
 WORKDIR /app
 COPY package.json package-lock.json ./
-RUN npm ci --omit=dev && npm cache clean --force
+# "npm ls" faz o build FALHAR se faltar dependência (o npm às vezes sai com sucesso mesmo com erro de rede)
+RUN npm ci --omit=dev && npm ls --omit=dev --all > /dev/null && npm cache clean --force
 COPY . .
 USER node
 EXPOSE 3000

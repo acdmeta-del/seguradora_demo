@@ -279,7 +279,9 @@
     const ok = $(".boleto-form__ok", form);
     const botao = $('button[type="submit"]', form);
     const caixaCaptcha = $("#boleto-turnstile", form);
-    const usarServidor = Boolean(B.endpoint);
+    // No Easypanel a API é do próprio site ("/api/boleto"); no GitHub Pages (demonstração), endereço completo
+    const endpoint = /\.github\.io$/.test(location.hostname) && B.endpointGithubPages ? B.endpointGithubPages : B.endpoint;
+    const usarServidor = Boolean(endpoint);
     let widget = null;
     let token = "";
 
@@ -350,7 +352,7 @@
           await new Promise((r) => setTimeout(r, 900)); // demonstração
           mostrar(ok, B.sucesso);
         } else {
-          const r = await fetch(B.endpoint, {
+          const r = await fetch(endpoint, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(p ? { placa: p, cpf: c, token } : { cpf: c, token }),

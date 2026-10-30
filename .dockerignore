@@ -1,0 +1,12 @@
+# Fora da imagem: dependências locais, testes, documentação, git e qualquer segredo
+.git
+**/node_modules
+**/.env
+**/.env.*
+!server/.env.example
+tests
+server/test
+docs
+*.md
+package.json
+package-lock.json

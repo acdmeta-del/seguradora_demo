@@ -26,7 +26,7 @@ antes de mudar qualquer chamada em `server/lib/hinova.js` ou `server/lib/config.
   ambiente do Easypanel (ver `server/.env.example`).
 - Respostas da Hinova têm CPF, telefone, e-mail e endereço: não logue payloads, mascare
   CPF/telefone/placa (`server/lib/validar.js`) e não crie fixtures com dados reais.
-- O site (GitHub Pages) nunca mostra dados do associado. A 2ª via vai só para o WhatsApp
+- O site nunca mostra dados do associado. A 2ª via vai só para o WhatsApp
   cadastrado na Hinova; a resposta da API do site é sempre genérica.
 - Valide tudo antes de enviar ao usuário final (`server/lib/formatar.js`): nada entra na
   mensagem sem virar texto e passar pela validação do seu tipo.
@@ -34,6 +34,9 @@ antes de mudar qualquer chamada em `server/lib/hinova.js` ou `server/lib/config.
 ## Projeto
 
 - Site estático sem build: `index.html`, `css/`, `js/`, `content/content.js` (textos).
-- Intermediário: `server/` (Node 20 + Express), implantado no Easypanel.
+- Intermediário: `server/` (Node 20 + Express). Em produção, **um app só** no Easypanel
+  (`Dockerfile` da raiz): serve o site e a vistoria (lista de permissão em `server/lib/site.js`;
+  ao criar página ou pasta pública nova, inclua lá e no `Dockerfile`) e a API `/api/boleto`.
+  O GitHub Pages é só a cópia de demonstração, até ser desligado.
 - Testes: `cd server && npm test` (intermediário) e `npm test` na raiz (site, Playwright).
 - Commits direto na `main` (demo), com mensagens em português.
