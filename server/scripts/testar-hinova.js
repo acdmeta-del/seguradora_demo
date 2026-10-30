@@ -142,7 +142,11 @@ try {
   }
 } catch (e) { falhou(e); }
 
-console.log(falhas
-  ? "\nAlgo falhou. \"Usuário ou senha inválidos\" na etapa 1: o usuário precisa estar ATIVO no SGA e ser da associação do token. 401 nas consultas: confira as rotas liberadas em Gerenciar APIs."
-  : "\nSe algum campo saiu como NÃO ENCONTRADO, ajuste HINOVA_CAMPO_* com os nomes listados acima.");
+console.log(!falhas
+  ? "\nSe algum campo saiu como NÃO ENCONTRADO, ajuste HINOVA_CAMPO_* com os nomes listados acima."
+  : cfg.modoAuth === "token"
+    // Modo token: não há login nesta etapa; 401 com "Login ou senha inválido" = o token_usuario deixou de valer
+    ? "\nAlgo falhou. No modo token, 401 (\"Acesso não autorizado\" / \"Login ou senha inválido\") quer dizer que o token_usuario em uso não vale mais: foi inativado em Gerenciar APIs, ou o usuário que o gerou mudou de senha ou foi desativado. Pegue um token_usuario atual (ex.: o do n8n, se lá funciona) ou use o modo usuario (HINOVA_AUTH=usuario + HINOVA_TOKEN_SGA + HINOVA_USUARIO + HINOVA_SENHA), que gera e renova o token sozinho."
+    : "\nAlgo falhou. \"Usuário ou senha inválidos\" na etapa 1: o usuário precisa estar ATIVO no SGA e ser da associação do token. 401 nas consultas: confira as rotas liberadas em Gerenciar APIs.");
+
 process.exit(falhas ? 1 : 0);
