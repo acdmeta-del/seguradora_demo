@@ -70,7 +70,7 @@ compatibilidade da CSP com o diálogo e com `fetch`.
 
 `vistoria-teste.html` valida, só no navegador, a experiência de tirar as fotos da vistoria. Ela não aparece no menu (`noindex,nofollow`, acesso direto pela URL) e **não faz nenhuma chamada de rede com fotos ou dados**. Nada de Hinova, nada de `server/`, nada de Turnstile. As fotos ficam na memória e no IndexedDB do aparelho e **expiram sozinhas em 4 horas** (`armazenamento.expiraHoras`). "Limpar tudo" apaga na hora.
 
-- **Endereço:** `https://integravps.flowbotics.app.br/vistoria-teste.html` no Easypanel (até a troca: `https://acdmeta-del.github.io/seguradora_demo/vistoria-teste.html`). Para o modo desenvolvedor, acrescente `?dev=1`.
+- **Endereço:** `https://integra-demo.enwglb.easypanel.host/vistoria-teste.html` no Easypanel (até a troca: `https://acdmeta-del.github.io/seguradora_demo/vistoria-teste.html`). Para o modo desenvolvedor, acrescente `?dev=1`.
 - **Celular:** abra o endereço acima. A câmera e a localização exigem HTTPS, que o GitHub Pages já fornece.
 - **Computador:** `npx http-server -p 8080` (ou outro servidor estático) e `http://localhost:8080/vistoria-teste.html?dev=1`. `localhost` conta como endereço seguro. Por IP da rede (`http://192.168...`) a câmera **não** abre: use um túnel HTTPS ou o GitHub Pages.
 
@@ -171,14 +171,14 @@ Enquanto `boleto.endpoint` estiver vazio em `content/content.js`, o pop-up funci
 
 ### Implantação no Easypanel (site + vistoria + API, num app só)
 
-**Domínio de produção:** `integravps.flowbotics.app.br`.
+**Endereço (por ora):** `https://integra-demo.enwglb.easypanel.host/`, o subdomínio do próprio Easypanel (HTTPS automático, sem DNS a configurar). Um domínio próprio pode entrar depois só com Domains, DNS e as duas variáveis abaixo.
 
 O `Dockerfile` da **raiz** monta a imagem com a API (`server/`) e o site (`index.html`, `vistoria-teste.html`, `css/`, `js/`, `content/`, `assets/` em `/app/public`). O servidor só entrega as páginas e pastas dessa lista (`server/lib/site.js`): código do servidor, `.env`, `docs/` e testes nunca saem, mesmo com `../` no endereço. O build **falha** se faltar alguma dependência do npm.
 
 1. **App**: no app que hoje roda a API (ou num novo), em Source aponte para este repositório, branch `main`, **Build path `/`** e **Dockerfile `Dockerfile`** (o `server/Dockerfile` antigo é só a API e fica como legado).
 2. **Environment**: as mesmas variáveis de hoje (`server/.env.example`): Hinova, Turnstile, Z-API, `MODO`. `SITE_DIR` já vem no Dockerfile. Ajuste:
-   - `ALLOWED_ORIGINS=https://integravps.flowbotics.app.br,https://acdmeta-del.github.io` (o segundo só enquanto o GitHub Pages existir).
-   - `TURNSTILE_HOSTNAMES=integravps.flowbotics.app.br,acdmeta-del.github.io` (idem; sem `https://`).
+   - `ALLOWED_ORIGINS=https://integra-demo.enwglb.easypanel.host,https://acdmeta-del.github.io` (o segundo só enquanto o GitHub Pages existir).
+   - `TURNSTILE_HOSTNAMES=integra-demo.enwglb.easypanel.host,acdmeta-del.github.io` (idem; sem `https://`).
    - **Hinova** (documentação, seção 1): `HINOVA_TOKEN_SGA` é o token gerado no SGA em Área do cliente → APIs → Gerenciar APIs. Com `HINOVA_USUARIO` e `HINOVA_SENHA` (usuário ATIVO do SGA, de preferência só para a integração), o servidor autentica em `/usuario/autenticar` e usa o `token_usuario` devolvido, que não expira. Alternativa: `HINOVA_TOKEN_USUARIO` com um `token_usuario` já obtido. `HINOVA_TOKEN` continua aceito (legado). Em Gerenciar APIs, marque os endpoints usados: `usuario/autenticar`, `veiculo/buscar`, `listar/boleto-associado-veiculo` e `buscar/boleto`.
    - **Z-API** (`WHATSAPP_PROVIDER=zapi`): `ZAPI_INSTANCE` (ID da instância), `ZAPI_TOKEN` (token da instância) e `ZAPI_CLIENT_TOKEN` (token de segurança da conta, no menu Segurança do painel). Sem os três, o servidor não sobe em produção.
 3. **Domains**: adicione o domínio de produção apontando para a porta `3000` (HTTPS automático) e, no provedor de DNS, um registro **A** para o IP da VPS. O subdomínio `*.easypanel.host` pode continuar como reserva. Câmera e GPS da vistoria exigem HTTPS: não use `http://`.
